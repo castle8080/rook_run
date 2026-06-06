@@ -1,0 +1,24 @@
+using RookRun.Strava.Auth.Models;
+
+namespace RookRun.Strava.Auth;
+
+/// <summary>
+/// Defines the interactive Strava OAuth flow entry point.
+/// </summary>
+public interface IStravaOAuthClient
+{
+    /// <summary>
+    /// Starts an interactive authorization flow and returns the acquired token payload.
+    /// </summary>
+    /// <param name="cancellationToken">Cancels the in-progress authorization flow.</param>
+    /// <returns>The token result returned from Strava after a successful authorization flow.</returns>
+    Task<StravaOAuthTokenResult> AcquireTokenAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Refreshes an access token using the supplied refresh token, or the configured refresh token when omitted.
+    /// </summary>
+    /// <param name="refreshToken">The refresh token to exchange, or <see langword="null"/> to use the configured token.</param>
+    /// <param name="cancellationToken">Cancels the outbound token refresh request.</param>
+    /// <returns>The token result returned from Strava after a successful refresh.</returns>
+    Task<StravaOAuthTokenResult> RefreshAccessTokenAsync(string? refreshToken = null, CancellationToken cancellationToken = default);
+}

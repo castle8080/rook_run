@@ -6,7 +6,7 @@ Design a reusable C# library that performs Strava OAuth using Strava's own autho
 
 The desired consumer experience is:
 
-- Call a single async method such as `AquireTokenAsync(...)`
+- Call a single async method such as `AcquireTokenAsync(...)`
 - The library starts a temporary local HTTP listener using ASP.NET Core minimal APIs
 - The library opens the system browser to Strava's authorization endpoint
 - Strava redirects back to the local callback endpoint with an authorization code
@@ -22,14 +22,13 @@ This design does not initially cover:
 - Multi-user web application sign-in
 - Background refresh daemon design
 - Support for identity providers other than Strava
-- PKCE unless Strava requirements or best practice review make it necessary for this app type
+- Additional OAuth flow variants beyond the documented Strava authorization code flow used by this design
 
 ## Desired User Experience
 
 The consuming code should look roughly like this:
 
-- `await stravaOAuthClient.AquireTokenAsync(cancellationToken)`
-- or `await stravaOAuthClient.AquireTokenAsync(new StravaOAuthRequestOptions { Scopes = ["activity:read_all"] }, cancellationToken)`
+- `await stravaOAuthClient.AcquireTokenAsync(cancellationToken)`
 
 Behavior from the caller's perspective:
 
@@ -50,7 +49,6 @@ The library should be composed of the following pieces:
 4. `StravaOAuthCallbackCoordinator`
 5. `IStravaAuthorizationLauncher`
 6. `IStravaTokenExchangeClient`
-7. Optionally `IStravaTokenStore` for later persistence support
 
 ### Core idea
 
@@ -61,35 +59,20 @@ The central coordination primitive should be a `TaskCompletionSource<T>` owned b
 ```csharp
 public interface IStravaOAuthClient
 {
-	Task<StravaOAuthTokenResult> AquireTokenAsync(CancellationToken cancellationToken = default);
-
-	Task<StravaOAuthTokenResult> AquireTokenAsync(
-		StravaOAuthRequestOptions requestOptions,
-		CancellationToken cancellationToken = default);
+	Task<StravaOAuthTokenResult> AcquireTokenAsync(CancellationToken cancellationToken = default);
 }
 ```
 
 Naming note:
 
 - The public interface should avoid exposing implementation details such as browser interactivity in the method name.
-- The method name `AquireTokenAsync` expresses the consumer intent while allowing different implementations behind the abstraction.
+- The method name `AcquireTokenAsync` expresses the consumer intent while allowing different implementations behind the abstraction.
 - The public interface should also avoid exposing client configuration details that belong to construction-time options.
-
-### Per-call request options model
-
-```csharp
-public sealed record StravaOAuthRequestOptions
-{
-	public IReadOnlyList<string>? Scopes { get; init; }
-	public TimeSpan? Timeout { get; init; }
-}
-```
 
 Design note:
 
-- This object should be optional and contain only true per-call overrides.
-- Configuration such as client ID, client secret, callback host, callback path, and authorization URLs belongs in client options or construction-time dependencies, not in a public request model.
-- If no per-call variation is needed, callers should use the parameterless `AquireTokenAsync(CancellationToken)` overload.
+- Configuration such as client ID, client secret, callback host, callback path, authorization URLs, scopes, timeout, and browser-launch behavior belongs in client options or construction-time dependencies, not in a public request model.
+- The public interface should stay minimal and represent token acquisition intent only.
 
 ### Result model
 
@@ -122,7 +105,7 @@ Port selection behavior:
 
 ## Main Sequence
 
-1. Caller invokes `AquireTokenAsync`
+1. Caller invokes `AcquireTokenAsync`
 2. Client validates input
 3. Client creates a unique flow state value
 4. Client creates a coordinator instance containing:
@@ -157,10 +140,10 @@ Responsibility:
 Key behavior:
 
 - One public async method
-- Optionally an overload that accepts per-call overrides such as scopes or timeout
 - Creates and tears down the temporary listener host
 - Creates state and coordinator objects
 - Applies timeout and cancellation
+- Starts the temporary listener during method invocation and tears it down before the method returns on success, failure, cancellation, or timeout
 
 ### 2. `StravaOAuthListenerHost`
 
@@ -185,7 +168,7 @@ A returned session object should allow clean disposal of the host.
 Important details:
 
 - Use ASP.NET Core minimal APIs
-- Bind only to loopback, preferably `127.0.0.1`
+- Bind only to loopback, with `localhost` as the default configured host
 - Prefer automatic port allocation by binding to port `0`
 - Return the effective bound callback URI to the caller after startup
 - Allow callers to request a fixed port only as an override
@@ -223,10 +206,12 @@ This is the in-memory mechanism that lets the callback endpoint notify the origi
 Concurrency and cleanup rules:
 
 - Each pending flow must move to exactly one terminal state.
+- The pending-flow entry must be created in the active dictionary before the browser is opened.
 - Completion methods should use `TrySetResult`, `TrySetException`, and `TrySetCanceled`.
 - Races between callback completion, timeout, and cancellation are expected and must be harmless.
-- `Remove(state)` must be idempotent.
+- `Remove(state)` must be idempotent and should use `TryRemove`.
 - Every flow must be removed exactly once from the active dictionary, even if multiple terminal signals arrive.
+- Success, callback error, timeout, and cancellation must all converge on the same terminal cleanup pattern.
 
 ### 4. `IStravaAuthorizationLauncher`
 
@@ -239,9 +224,9 @@ Suggested default implementation:
 - Use `Process.Start` with `UseShellExecute = true`
 - This should open the default system browser
 
-Optional future abstraction:
+V1 behavior:
 
-- Allow callers to disable auto-open and receive the URL so they can open it manually
+- If browser launch fails, throw a browser-launch exception and terminate the flow
 
 ### 5. `IStravaTokenExchangeClient`
 
@@ -298,7 +283,7 @@ Example path:
 
 Purpose:
 
-- Show a simple page such as "Authorization completed. You may close this window."
+- Show a friendly confirmation page that includes completion status and, when available, granted scopes and access-token expiration time
 
 This endpoint is optional. The callback endpoint may also directly render success content.
 
@@ -308,13 +293,118 @@ The temporary listener should return small human-readable HTML responses for all
 
 Required pages or responses:
 
-- success: "Authorization completed. You may close this window."
+- success: a friendly confirmation page that shows completion status, granted scopes, and access-token expiration time, while never showing secrets
 - user denied consent: "Authorization was denied. You may close this window."
 - invalid or expired state: "This authorization session is invalid or expired. You may close this window."
 - token exchange failure: "Authorization completed but token exchange failed. You may close this window."
 - timeout or canceled flow: "This authorization session is no longer active. You may close this window."
 
 These responses should be intentionally simple and should not display secrets, authorization codes, or raw server exceptions.
+
+## UX Design for Browser Pages
+
+The temporary callback pages should be generated inline at runtime using simple HTML strings produced by C# code. No separate static assets are required for V1.
+
+UX goals:
+
+- make it immediately obvious whether authorization succeeded or failed
+- provide just enough information for the user to trust the result
+- avoid exposing secrets or overly technical details
+- use a clean layout that works well in a small browser window
+
+### Success page content
+
+The success page should show:
+
+- a clear success title
+- a short confirmation message
+- granted scopes returned by Strava
+- access-token expiration time
+- a note that the window can be closed
+
+The success page must not show:
+
+- access token
+- refresh token
+- authorization code
+- client secret
+
+Suggested wireframe:
+
+```text
++------------------------------------------------------+
+|  [Success Icon]  Strava authorization completed      |
+|                                                      |
+|  Your Strava connection was established successfully.|
+|                                                      |
+|  Granted scopes                                      |
+|  - activity:read_all                                 |
+|                                                      |
+|  Access token expires                                |
+|  2026-06-15 20:45:00 UTC                             |
+|                                                      |
+|  You may now close this window and return to the app.|
++------------------------------------------------------+
+```
+
+### Failure page content
+
+Failure pages should share a common visual shape but vary the main message depending on the failure mode.
+
+Failure variants:
+
+- authorization denied by user
+- invalid or expired state
+- token exchange failure
+- timed out or canceled flow
+
+Failure pages should show:
+
+- a clear failure title
+- a short explanation in plain language
+- optional non-sensitive next-step guidance
+- a note that the window can be closed
+
+Failure pages must not show:
+
+- raw exception stack traces
+- access token
+- refresh token
+- authorization code
+- client secret
+
+Suggested wireframe:
+
+```text
++------------------------------------------------------+
+|  [Error Icon]  Strava authorization failed           |
+|                                                      |
+|  The authorization could not be completed.           |
+|                                                      |
+|  Reason                                               |
+|  The authorization session expired or was canceled.  |
+|                                                      |
+|  Next step                                            |
+|  Return to the application and try again.            |
+|                                                      |
+|  You may now close this window.                      |
++------------------------------------------------------+
+```
+
+### Visual style guidance
+
+- use inline CSS only
+- use a centered card layout with readable spacing
+- use a distinct success and failure accent color
+- keep typography simple and system-font based
+- ensure the page remains readable without external assets or scripts
+- avoid any dependency on images, icons, or fonts that require network access
+
+### Data formatting guidance
+
+- render scopes as a short bullet list or comma-separated list
+- render expiration time in UTC with a clear label
+- if scope or expiration data is unavailable, omit that section rather than displaying placeholder secrets or raw JSON
 
 ## In-Memory Notification Mechanism
 
@@ -495,19 +585,17 @@ The minimum mandatory security measures for V1 are:
 ## Proposed Internal Flow Pseudocode
 
 ```csharp
-public async Task<StravaOAuthTokenResult> AquireTokenAsync(...)
+public async Task<StravaOAuthTokenResult> AcquireTokenAsync(...)
 {
-	ValidateRequestOptions(requestOptions);
-
 	var state = StateGenerator.Create();
-	var effectiveOptions = MergeRequestOptionsWithConfiguredDefaults(requestOptions);
-	using var timeoutCts = new CancellationTokenSource(effectiveOptions.Timeout);
+	using var timeoutCts = new CancellationTokenSource(clientOptions.DefaultTimeout);
 	using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeoutCts.Token);
 
+	// Register the pending flow before opening the browser so the callback can always resolve state.
 	var pendingFlow = coordinator.CreatePendingFlow(state);
 	await using var listener = await listenerHost.StartAsync(..., linkedCts.Token);
 
-	var authorizeUrl = authorizationUrlBuilder.Build(effectiveOptions, listener.CallbackUri, state);
+	var authorizeUrl = authorizationUrlBuilder.Build(clientOptions, listener.CallbackUri, state);
 
 	if (clientOptions.AutoOpenBrowser)
 	{
@@ -523,6 +611,7 @@ public async Task<StravaOAuthTokenResult> AquireTokenAsync(...)
 	}
 	finally
 	{
+		// Terminal cleanup must always remove the flow entry, regardless of success, error, timeout, or cancellation.
 		coordinator.Remove(state);
 	}
 }
@@ -579,7 +668,7 @@ The authorize URL builder should include at minimum:
 
 Example conceptual URL:
 
-- `https://www.strava.com/oauth/authorize?client_id=...&redirect_uri=http://127.0.0.1:54123/auth/strava/callback&response_type=code&approval_prompt=auto&scope=activity:read_all&state=...`
+- `https://www.strava.com/oauth/authorize?client_id=...&redirect_uri=http://localhost:54123/auth/strava/callback&response_type=code&approval_prompt=auto&scope=activity:read_all&state=...`
 
 ## Provider Compatibility Constraints
 
@@ -605,22 +694,6 @@ Implementation note:
 
 - The documentation supports loopback redirect URIs by host, not only by publicly routable domains.
 - Even with that documented guidance, the implementation should retain fixed-port override in case an application's callback-domain registration or operational environment imposes narrower constraints in practice.
-
-### PKCE assessment
-
-I checked Strava's authentication documentation for PKCE-related parameters and guidance.
-
-Current result:
-
-- The documented Strava flow describes `response_type=code` and a token exchange using `client_id` and `client_secret`.
-- The documentation inspected did not show `code_challenge`, `code_verifier`, or other PKCE-specific parameters.
-- Based on the current published documentation, PKCE should not be assumed for V1.
-
-Recommendation:
-
-- Implement the documented authorization code flow with `client_id`, `client_secret`, `state`, and loopback callback handling.
-- Keep PKCE out of V1 unless Strava publishes explicit support and requirements for it.
-- Leave room in the API design to add PKCE later without breaking the public contract.
 
 ## Token Exchange Requirements
 
@@ -666,7 +739,7 @@ The public client should normalize low-level failures into these where practical
 
 The temporary listener host should:
 
-- Start only when `AquireTokenAsync` is invoked
+- Start only when `AcquireTokenAsync` is invoked
 - Stay alive only for the duration of one auth flow
 - Shut down on success, failure, cancellation, or timeout
 
@@ -679,17 +752,12 @@ The browser is not managed beyond launch.
 
 ## Concurrency Model
 
-Version 1 should support one flow at a time per client instance, but the coordinator design may allow multiple concurrent flows if needed.
+Version 1 should support concurrent `AcquireTokenAsync` calls by keying each pending flow by unique `state`.
 
 Recommended V1 approach:
 
-- Either explicitly guard against concurrent `AquireTokenAsync` calls
-- Or support them by keying each pending flow by unique `state`
-
-Preferred implementation:
-
-- Allow multiple flows by unique state if complexity remains low
-- If not, document single-flow-per-instance behavior clearly
+- Allow multiple concurrent flows by unique state
+- Keep the in-memory coordinator responsible for isolating concurrent pending flows
 
 ## Configuration
 
@@ -702,7 +770,7 @@ public sealed record StravaOAuthClientOptions
 	public required string ClientSecret { get; init; }
 	public string AuthorizationBaseUrl { get; init; } = "https://www.strava.com/oauth";
 	public string ApiBaseUrl { get; init; } = "https://www.strava.com/api/v3";
-	public string CallbackHost { get; init; } = "127.0.0.1";
+	public string CallbackHost { get; init; } = "localhost";
 	public int? CallbackPort { get; init; }
 	public string CallbackPath { get; init; } = "/auth/strava/callback";
 	public string SuccessPath { get; init; } = "/auth/strava/success";
@@ -725,7 +793,7 @@ This new OAuth library can coexist with the existing `IStravaActivities` client.
 
 Suggested integration path:
 
-1. Build the interactive OAuth flow as a separate library or namespace, for example:
+1. Build the interactive OAuth flow inside the existing `RookRun.Strava` project under a dedicated namespace and folder, for example:
    - `RookRun.Strava.Auth`
 2. Use it only for obtaining the initial token set
 3. Store the resulting refresh token in configuration or a secure store
@@ -740,11 +808,11 @@ This keeps concerns separated:
 
 Recommended project:
 
-- `RookRun.Strava.Auth`
+- existing project: `RookRun.Strava`
 
 Recommended root namespace:
 
-- `RookRun.Strava.Auth`
+- auth sub-namespace: `RookRun.Strava.Auth`
 
 Suggested folders:
 
@@ -754,7 +822,6 @@ Suggested folders:
   - `IStravaTokenExchangeClient.cs`
   - `IStravaOAuthListenerHost.cs`
 - `Models`
-	- `StravaOAuthRequestOptions.cs`
   - `StravaOAuthTokenResult.cs`
   - `StravaAuthorizationCodeExchangeRequest.cs`
 - `Hosting`
@@ -785,39 +852,46 @@ Recommended public namespace shape:
 
 Recommended adjacent layering:
 
-- `RookRun.Strava.Auth` for interactive token acquisition
-- `RookRun.Strava.Tokens` for persistence, caching, and refresh behavior
+- `RookRun.Strava.Auth` for interactive token acquisition inside the existing `RookRun.Strava` project
+- `RookRun.Strava.Tokens` as a logical layer or future namespace for persistence, caching, and refresh behavior if that concern grows later
 - `RookRun.Strava` for API clients such as activities access
 
 This separation keeps the browser/listener flow isolated from token lifecycle management and from the Strava API surface itself.
 
 ## Recommended Project Layout
 
-Option A: new project
+Keep the auth implementation inside the existing `RookRun.Strava` project.
 
-- `RookRun.Strava.Auth`
+Suggested folder layout:
 
-Suggested files:
+- `RookRun.Strava/Auth/Abstractions`
+  - `IStravaOAuthClient.cs`
+  - `IStravaAuthorizationLauncher.cs`
+  - `IStravaTokenExchangeClient.cs`
+  - `IStravaOAuthListenerHost.cs`
+- `RookRun.Strava/Auth/Models`
+  - `StravaOAuthTokenResult.cs`
+  - `StravaAuthorizationCodeExchangeRequest.cs`
+- `RookRun.Strava/Auth/Hosting`
+  - `StravaOAuthListenerHost.cs`
+  - `StravaOAuthListenerSession.cs`
+- `RookRun.Strava/Auth/Coordination`
+  - `StravaOAuthCallbackCoordinator.cs`
+  - `PendingAuthorizationFlow.cs`
+- `RookRun.Strava/Auth/Browser`
+  - `DefaultStravaAuthorizationLauncher.cs`
+- `RookRun.Strava/Auth/Http`
+  - `StravaTokenExchangeClient.cs`
+  - `StravaAuthorizationUrlBuilder.cs`
+- `RookRun.Strava/Auth/Exceptions`
+  - `StravaOAuthException.cs`
+  - related exception types
+- `RookRun.Strava/Auth/Options`
+  - `StravaOAuthClientOptions.cs`
+- `RookRun.Strava/Auth/DependencyInjection`
+  - `ServiceCollectionExtensions.cs`
 
-- `IStravaOAuthClient.cs`
-- `StravaOAuthClient.cs`
-- `StravaOAuthClientOptions.cs`
-- `IStravaOAuthListenerHost.cs`
-- `StravaOAuthListenerHost.cs`
-- `StravaOAuthCallbackCoordinator.cs`
-- `IStravaAuthorizationLauncher.cs`
-- `DefaultStravaAuthorizationLauncher.cs`
-- `IStravaTokenExchangeClient.cs`
-- `StravaTokenExchangeClient.cs`
-- `Models/StravaOAuthRequestOptions.cs`
-- `Models/StravaOAuthTokenResult.cs`
-- `Exceptions/...`
-
-Option B: keep inside existing project
-
-- `RookRun.Strava/Auth/...`
-
-Option A is preferred because it separates interactive auth concerns from the main API client.
+This keeps the auth-specific code isolated by namespace and folder while avoiding the overhead of another project.
 
 ## Observability
 
@@ -838,7 +912,29 @@ Logs must not include:
 - refresh token
 - raw authorization code
 
-## Testing Strategy
+## Testing and Testability
+
+This design is not trivial to test end-to-end as a pure unit because it coordinates browser launch, temporary HTTP hosting, callback handling, and asynchronous completion. To keep it testable, orchestration concerns must remain separated behind small abstractions.
+
+Testability goals:
+
+- keep browser launch abstracted behind `IStravaAuthorizationLauncher`
+- keep listener hosting abstracted behind `IStravaOAuthListenerHost`
+- keep token exchange abstracted behind `IStravaTokenExchangeClient`
+- keep the state-tracking coordinator independently testable without a live web server
+- keep URL construction and response parsing in small deterministic components
+
+Design rule:
+
+- avoid collapsing orchestration, browser launch, listener hosting, callback handling, and token exchange into one large class, because that would make race handling and failure paths much harder to test reliably
+
+Recommended test split:
+
+- unit tests for deterministic logic and orchestration decisions
+- integration tests for the temporary minimal API listener and callback flow
+- manual verification for real browser and Strava authorization behavior
+
+Unit tests for this design should be added to the existing `RookRun.UnitTest` project.
 
 ### Unit tests
 
@@ -878,11 +974,7 @@ The design is ready to implement only when all of the following are satisfied:
 
 ## Open Questions
 
-1. Should V1 include PKCE if Strava supports and recommends it for this app pattern?
-2. Should the library automatically persist the refresh token, or should persistence stay outside the auth component?
-3. Should the success page display the granted scopes and expiration time for user confirmation?
-4. Should the callback host ever default to a fixed port, or should dynamic loopback port allocation be mandatory by default?
-5. Should the auth library be generic OAuth infrastructure with a Strava-specific adapter, or explicitly Strava-only?
+No major open design questions remain for V1.
 
 ## Recommendation
 
@@ -890,7 +982,7 @@ Proceed with a Strava-specific library first.
 
 Recommended V1 design:
 
-- `IStravaOAuthClient.AquireTokenAsync(...)`
+- `IStravaOAuthClient.AcquireTokenAsync(...)`
 - temporary localhost minimal API host
 - dynamic loopback port allocation by default
 - browser launch via shell execution
@@ -917,10 +1009,5 @@ Configuration owned by the client instance:
 - default scopes
 - default timeout
 - default browser-launch behavior
-
-Per-call input owned by the caller:
-
-- optional scope override
-- optional timeout override
 
 This keeps the public API from leaking transport and registration details that the caller should not have to supply each time a token is requested.
