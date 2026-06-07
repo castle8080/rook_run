@@ -1,4 +1,4 @@
-using RookRun.Strava.Auth;
+using RookRun.Strava.Client.Auth;
 using System.Text.Json;
 
 namespace RookRun.UnitTest.Strava;

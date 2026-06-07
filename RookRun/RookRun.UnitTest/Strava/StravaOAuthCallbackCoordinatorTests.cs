@@ -1,5 +1,5 @@
-using RookRun.Strava.Auth.Coordination;
-using RookRun.Strava.Auth.Exceptions;
+using RookRun.Strava.Client.Auth.Coordination;
+using RookRun.Strava.Client.Auth.Exceptions;
 namespace RookRun.UnitTest.Strava;
 
 public class StravaOAuthCallbackCoordinatorTests

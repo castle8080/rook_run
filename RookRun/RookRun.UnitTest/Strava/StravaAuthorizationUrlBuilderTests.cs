@@ -1,5 +1,5 @@
-using RookRun.Strava.Auth;
-using RookRun.Strava.Auth.Http;
+using RookRun.Strava.Client.Auth;
+using RookRun.Strava.Client.Auth.Http;
 using System.Web;
 
 namespace RookRun.UnitTest.Strava;

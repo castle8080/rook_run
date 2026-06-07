@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using RookRun.Strava;
+using RookRun.Strava.Client;
 using RookRun.Strava.DependencyInjection;
 using RookRun.Strava.Models;
 using RookRun.Strava.Options;
@@ -14,7 +14,7 @@ public class StravaActivitiesTests
     [Fact]
     public void SearchActivitiesAsync_ThrowsWhenPageIsZero()
     {
-        var method = typeof(RookRun.Strava.StravaActivities)
+        var method = typeof(StravaActivitiesClient)
             .GetMethod("BuildActivitiesUri", BindingFlags.NonPublic | BindingFlags.Static);
 
         Assert.NotNull(method);
@@ -28,7 +28,7 @@ public class StravaActivitiesTests
     [Fact]
     public void SearchActivitiesAsync_ThrowsWhenPerPageIsOutOfRange()
     {
-        var method = typeof(RookRun.Strava.StravaActivities)
+        var method = typeof(StravaActivitiesClient)
             .GetMethod("BuildActivitiesUri", BindingFlags.NonPublic | BindingFlags.Static);
 
         Assert.NotNull(method);
@@ -55,7 +55,7 @@ public class StravaActivitiesTests
         services.AddStravaActivities(configuration.GetSection(StravaOptions.SectionName));
 
         using var serviceProvider = services.BuildServiceProvider();
-        var exception = Record.Exception(() => serviceProvider.GetRequiredService<IStravaActivities>());
+        var exception = Record.Exception(() => serviceProvider.GetRequiredService<IStravaActivitiesClient>());
 
         Assert.Null(exception);
     }

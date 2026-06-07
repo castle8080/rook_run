@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\RookRun.Job\RookRun.Job.csproj" />
+    <ProjectReference Include="..\RookRun.ObjectStore\RookRun.ObjectStore.csproj" />
     <ProjectReference Include="..\RookRun.Strava\RookRun.Strava.csproj" />
   </ItemGroup>
 

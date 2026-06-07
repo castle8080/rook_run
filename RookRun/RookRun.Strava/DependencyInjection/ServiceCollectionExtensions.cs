@@ -1,9 +1,10 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using RookRun.Strava.Auth;
-using RookRun.Strava.Auth.Browser;
-using RookRun.Strava.Auth.Hosting;
+using RookRun.Strava.Client;
+using RookRun.Strava.Client.Auth;
+using RookRun.Strava.Client.Auth.Browser;
+using RookRun.Strava.Client.Auth.Hosting;
 using RookRun.Strava.Options;
 using System.Net.Http.Headers;
 
@@ -49,8 +50,8 @@ public static class ServiceCollectionExtensions
                 ? new WindowsDpapiStravaTokenStore(serviceProvider.GetRequiredService<IOptions<StravaTokenStoreOptions>>())
                 : new NullStravaTokenStore();
         });
-        services.AddSingleton<IStravaAccessTokenProvider, RookRun.Strava.Auth.StravaAccessTokenProvider>();
-        services.AddSingleton<IStravaActivities, StravaActivities>();
+        services.AddSingleton<IStravaAccessTokenProvider, RookRun.Strava.Client.Auth.StravaAccessTokenProvider>();
+        services.AddSingleton<IStravaActivitiesClient, StravaActivitiesClient>();
         services.AddSingleton<IStravaAuthorizationLauncher, DefaultStravaAuthorizationLauncher>();
         services.AddSingleton<IStravaOAuthListenerHost, StravaOAuthListenerHost>();
         services.AddSingleton<IStravaOAuthClient, StravaOAuthClient>();

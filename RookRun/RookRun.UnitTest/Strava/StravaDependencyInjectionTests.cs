@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using RookRun.Strava.Auth;
+using RookRun.Strava.Client.Auth;
 using RookRun.Strava.DependencyInjection;
 using RookRun.Strava.Options;
 

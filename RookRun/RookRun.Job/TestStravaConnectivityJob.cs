@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Logging;
-using RookRun.Strava;
+using RookRun.Strava.Client;
 using System.Linq;
 
 namespace RookRun.Job;
@@ -7,11 +7,11 @@ namespace RookRun.Job;
 public class TestStravaConnectivityJob : IJob
 {
     private readonly ILogger<TestStravaConnectivityJob> _logger;
-    private readonly IStravaActivities _stravaActivities;
+    private readonly IStravaActivitiesClient _stravaActivities;
 
     public TestStravaConnectivityJob(
         ILogger<TestStravaConnectivityJob> logger,
-        IStravaActivities stravaActivities)
+        IStravaActivitiesClient stravaActivities)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _stravaActivities = stravaActivities ?? throw new ArgumentNullException(nameof(stravaActivities));

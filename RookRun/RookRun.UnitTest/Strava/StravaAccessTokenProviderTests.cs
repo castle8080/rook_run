@@ -1,5 +1,5 @@
-using RookRun.Strava.Auth;
-using RookRun.Strava.Auth.Models;
+using RookRun.Strava.Client.Auth;
+using RookRun.Strava.Client.Auth.Models;
 
 namespace RookRun.UnitTest.Strava;
 

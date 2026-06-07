@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Options;
-using RookRun.Strava.Auth;
+using RookRun.Strava.Client.Auth;
 using System.Runtime.Versioning;
 
 namespace RookRun.UnitTest.Strava;
