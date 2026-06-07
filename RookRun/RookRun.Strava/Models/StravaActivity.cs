@@ -47,6 +47,12 @@ public sealed record StravaActivity
     [JsonPropertyName("max_heartrate")]
     public double? MaxHeartrate { get; init; }
 
+    [JsonPropertyName("start_latlng")]
+    public double[]? StartLatLng { get; init; }
+
+    [JsonPropertyName("end_latlng")]
+    public double[]? EndLatLng { get; init; }
+
     [JsonExtensionData]
     public Dictionary<string, JsonElement> AdditionalData { get; init; } = [];
 }

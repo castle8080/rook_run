@@ -15,10 +15,10 @@ public interface IStravaOAuthClient
     Task<StravaOAuthTokenResult> AcquireTokenAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Refreshes an access token using the supplied refresh token, or the configured refresh token when omitted.
+    /// Refreshes an access token using the supplied refresh token.
     /// </summary>
-    /// <param name="refreshToken">The refresh token to exchange, or <see langword="null"/> to use the configured token.</param>
+    /// <param name="refreshToken">The refresh token to exchange.</param>
     /// <param name="cancellationToken">Cancels the outbound token refresh request.</param>
     /// <returns>The token result returned from Strava after a successful refresh.</returns>
-    Task<StravaOAuthTokenResult> RefreshAccessTokenAsync(string? refreshToken = null, CancellationToken cancellationToken = default);
+    Task<StravaOAuthTokenResult> RefreshAccessTokenAsync(string refreshToken, CancellationToken cancellationToken = default);
 }

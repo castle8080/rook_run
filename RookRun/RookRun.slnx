@@ -1,5 +1,4 @@
 <Solution>
-  <Project Path="RookRun.Garmin/RookRun.Garmin.csproj" />
   <Project Path="RookRun.Job/RookRun.Job.csproj" />
   <Project Path="RookRun.Strava/RookRun.Strava.csproj" Id="9b7edcfb-ad0c-472e-916c-8f18f8528a6f" />
   <Project Path="RookRun.UnitTest/RookRun.UnitTest.csproj" Id="1fccb53c-e701-46c2-aa6e-e1f4921046f3" />

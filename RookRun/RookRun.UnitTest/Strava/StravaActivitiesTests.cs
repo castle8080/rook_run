@@ -5,6 +5,7 @@ using RookRun.Strava.DependencyInjection;
 using RookRun.Strava.Models;
 using RookRun.Strava.Options;
 using System.Reflection;
+using System.Text.Json;
 
 namespace RookRun.UnitTest.Strava;
 
@@ -46,8 +47,7 @@ public class StravaActivitiesTests
             {
                 [$"{StravaOptions.SectionName}:ApiBaseUrl"] = "https://www.strava.com/api/v3",
                 [$"{StravaOptions.SectionName}:ClientId"] = "client-id",
-                [$"{StravaOptions.SectionName}:ClientSecret"] = "client-secret",
-                [$"{StravaOptions.SectionName}:RefreshToken"] = "refresh-token"
+                [$"{StravaOptions.SectionName}:ClientSecret"] = "client-secret"
             })
             .Build();
 
@@ -58,5 +58,23 @@ public class StravaActivitiesTests
         var exception = Record.Exception(() => serviceProvider.GetRequiredService<IStravaActivities>());
 
         Assert.Null(exception);
+    }
+
+    [Fact]
+    public void StravaActivity_DeserializesStartAndEndLatLng()
+    {
+        const string json = """
+            {
+              "id": 123,
+              "start_latlng": [47.6062, -122.3321],
+              "end_latlng": [47.6205, -122.3493]
+            }
+            """;
+
+        var activity = JsonSerializer.Deserialize<StravaActivity>(json);
+
+        Assert.NotNull(activity);
+        Assert.Equal([47.6062, -122.3321], activity!.StartLatLng);
+        Assert.Equal([47.6205, -122.3493], activity.EndLatLng);
     }
 }

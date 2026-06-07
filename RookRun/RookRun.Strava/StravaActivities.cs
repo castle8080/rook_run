@@ -9,30 +9,25 @@ using System.Net.Http.Json;
 namespace RookRun.Strava;
 
 /// <summary>
-/// Provides access to the authenticated Strava activities API and coordinates token acquisition.
+/// Provides access to the authenticated Strava activities API.
 /// </summary>
-public sealed class StravaActivities : IStravaActivities, IDisposable
+public sealed class StravaActivities : IStravaActivities
 {
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly StravaOptions _options;
-    private readonly IStravaOAuthClient _stravaOAuthClient;
-    private readonly SemaphoreSlim _accessTokenLock = new(1, 1);
-
-    private string? _refreshToken;
-    private string? _accessToken;
-    private DateTimeOffset _accessTokenExpiresAt;
+    private readonly IStravaAccessTokenProvider _accessTokenProvider;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="StravaActivities"/> class.
     /// </summary>
     /// <param name="httpClientFactory">The HTTP client factory used to create Strava API clients.</param>
     /// <param name="options">The configured Strava client options.</param>
-    /// <param name="stravaOAuthClient">The Strava OAuth client used to perform token refreshes.</param>
-    public StravaActivities(IHttpClientFactory httpClientFactory, IOptions<StravaOptions> options, IStravaOAuthClient stravaOAuthClient)
+    /// <param name="accessTokenProvider">The Strava access token provider used to supply bearer tokens.</param>
+    public StravaActivities(IHttpClientFactory httpClientFactory, IOptions<StravaOptions> options, IStravaAccessTokenProvider accessTokenProvider)
     {
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
-        _stravaOAuthClient = stravaOAuthClient ?? throw new ArgumentNullException(nameof(stravaOAuthClient));
+        _accessTokenProvider = accessTokenProvider ?? throw new ArgumentNullException(nameof(accessTokenProvider));
         ValidateOptions(_options);
     }
 
@@ -47,7 +42,7 @@ public sealed class StravaActivities : IStravaActivities, IDisposable
 
         var httpClient = _httpClientFactory.CreateClient("StravaActivities");
         using var request = new HttpRequestMessage(HttpMethod.Get, BuildActivitiesUri(query));
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await GetAccessTokenAsync(cancellationToken));
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await _accessTokenProvider.GetAccessTokenAsync(cancellationToken));
 
         using var response = await httpClient.SendAsync(request, cancellationToken);
         await EnsureSuccessAsync(response, cancellationToken);
@@ -55,55 +50,6 @@ public sealed class StravaActivities : IStravaActivities, IDisposable
         var activities = await response.Content.ReadFromJsonAsync<List<StravaActivity>>(cancellationToken: cancellationToken);
         return activities ?? [];
     }
-
-    /// <summary>
-    /// Releases the synchronization resources used by the client.
-    /// </summary>
-    public void Dispose()
-    {
-        _accessTokenLock.Dispose();
-    }
-
-    /// <summary>
-    /// Returns a valid access token, refreshing or acquiring it when the cached token is missing or near expiry.
-    /// </summary>
-    /// <param name="cancellationToken">Cancels the token retrieval or refresh operation.</param>
-    /// <returns>A valid Strava access token.</returns>
-    private async Task<string> GetAccessTokenAsync(CancellationToken cancellationToken)
-    {
-        if (HasValidAccessToken())
-        {
-            return _accessToken!;
-        }
-
-        await _accessTokenLock.WaitAsync(cancellationToken);
-        try
-        {
-            if (HasValidAccessToken())
-            {
-                return _accessToken!;
-            }
-
-            var tokenResponse = await GetFreshTokenAsync(cancellationToken);
-
-            _accessToken = tokenResponse.AccessToken;
-            _refreshToken = tokenResponse.RefreshToken;
-            _accessTokenExpiresAt = DateTimeOffset.FromUnixTimeSeconds(tokenResponse.ExpiresAtUnixTimeSeconds);
-
-            return _accessToken;
-        }
-        finally
-        {
-            _accessTokenLock.Release();
-        }
-    }
-
-    /// <summary>
-    /// Determines whether the cached access token can still be used for outgoing API requests.
-    /// </summary>
-    /// <returns><see langword="true"/> when the cached token is still valid; otherwise, <see langword="false"/>.</returns>
-    private bool HasValidAccessToken() =>
-        !string.IsNullOrWhiteSpace(_accessToken) && _accessTokenExpiresAt > DateTimeOffset.UtcNow.AddMinutes(1);
 
     /// <summary>
     /// Validates the configured Strava options before the client starts making requests.
@@ -117,23 +63,6 @@ public sealed class StravaActivities : IStravaActivities, IDisposable
         if (!Uri.TryCreate(options.ApiBaseUrl, UriKind.Absolute, out _))
         {
             throw new ArgumentException("ApiBaseUrl must be an absolute URI.", nameof(options));
-        }
-    }
-
-    /// <summary>
-    /// Retrieves a fresh token result, preferring refresh-token exchange and falling back to interactive authorization.
-    /// </summary>
-    /// <param name="cancellationToken">Cancels the token retrieval operation.</param>
-    /// <returns>A fresh OAuth token result.</returns>
-    private async Task<Auth.Models.StravaOAuthTokenResult> GetFreshTokenAsync(CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await _stravaOAuthClient.RefreshAccessTokenAsync(_refreshToken, cancellationToken);
-        }
-        catch (InvalidOperationException) when (string.IsNullOrWhiteSpace(_refreshToken))
-        {
-            return await _stravaOAuthClient.AcquireTokenAsync(cancellationToken);
         }
     }
 

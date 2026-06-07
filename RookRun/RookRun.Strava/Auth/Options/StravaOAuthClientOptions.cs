@@ -33,11 +33,6 @@ public sealed record StravaOAuthClientOptions
     public string ApiBaseUrl { get; init; } = "https://www.strava.com/api/v3";
 
     /// <summary>
-    /// Gets the refresh token used to renew access tokens without interactive authorization.
-    /// </summary>
-    public string? RefreshToken { get; init; }
-
-    /// <summary>
     /// Gets the loopback host used by the temporary listener.
     /// </summary>
     public string CallbackHost { get; init; } = IPAddress.Loopback.ToString();

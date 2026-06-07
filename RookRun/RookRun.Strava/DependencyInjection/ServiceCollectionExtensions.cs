@@ -24,6 +24,10 @@ public static class ServiceCollectionExtensions
             .AddOptions<StravaOAuthClientOptions>()
             .Bind(configuration);
 
+        services
+            .AddOptions<StravaTokenStoreOptions>()
+            .Bind(configuration);
+
         services.AddHttpClient(HttpClientName, static (serviceProvider, httpClient) =>
         {
             var options = serviceProvider.GetRequiredService<IOptions<StravaOptions>>().Value;
@@ -38,6 +42,14 @@ public static class ServiceCollectionExtensions
             httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         });
 
+        services.AddSingleton<IStravaTokenStore>(static serviceProvider =>
+        {
+            var options = serviceProvider.GetRequiredService<IOptions<StravaTokenStoreOptions>>().Value;
+            return options.UseWindowsDpapi && OperatingSystem.IsWindows()
+                ? new WindowsDpapiStravaTokenStore(serviceProvider.GetRequiredService<IOptions<StravaTokenStoreOptions>>())
+                : new NullStravaTokenStore();
+        });
+        services.AddSingleton<IStravaAccessTokenProvider, RookRun.Strava.Auth.StravaAccessTokenProvider>();
         services.AddSingleton<IStravaActivities, StravaActivities>();
         services.AddSingleton<IStravaAuthorizationLauncher, DefaultStravaAuthorizationLauncher>();
         services.AddSingleton<IStravaOAuthListenerHost, StravaOAuthListenerHost>();

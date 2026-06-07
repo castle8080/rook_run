@@ -101,25 +101,17 @@ public sealed class StravaOAuthClient : IStravaOAuthClient
     }
 
     /// <inheritdoc />
-    public Task<StravaOAuthTokenResult> RefreshAccessTokenAsync(string? refreshToken = null, CancellationToken cancellationToken = default)
+    public Task<StravaOAuthTokenResult> RefreshAccessTokenAsync(string refreshToken, CancellationToken cancellationToken = default)
     {
         ValidateOptions(_options);
-
-        var tokenToRefresh = string.IsNullOrWhiteSpace(refreshToken)
-            ? _options.RefreshToken
-            : refreshToken;
-
-        if (string.IsNullOrWhiteSpace(tokenToRefresh))
-        {
-            throw new InvalidOperationException("A Strava refresh token is required to refresh the access token.");
-        }
+        ArgumentException.ThrowIfNullOrWhiteSpace(refreshToken);
 
         return ExchangeTokenAsync(
             new Dictionary<string, string>
             {
                 ["client_id"] = _options.ClientId,
                 ["client_secret"] = _options.ClientSecret,
-                ["refresh_token"] = tokenToRefresh,
+                ["refresh_token"] = refreshToken,
                 ["grant_type"] = "refresh_token"
             },
             cancellationToken);

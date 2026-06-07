@@ -17,7 +17,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\RookRun.Garmin\RookRun.Garmin.csproj" />
     <ProjectReference Include="..\RookRun.Job\RookRun.Job.csproj" />
     <ProjectReference Include="..\RookRun.Strava\RookRun.Strava.csproj" />
   </ItemGroup>
