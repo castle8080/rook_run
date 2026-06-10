@@ -18,7 +18,9 @@ namespace RookRun
                 try
                 {
                     // Get job to run
-                    var jobName = "TestStravaConnectivityJob";
+                    //var jobName = "SyncStravaActivitiesJob";
+                    var jobName = "StravaActivitiesExportJob";
+                    //var jobName = "ProcessGoogleHealthExportJob";
                     var job = host.Services.GetRequiredKeyedService<IJob>(jobName);
 
                     await job.ExecuteAsync(CancellationToken.None);

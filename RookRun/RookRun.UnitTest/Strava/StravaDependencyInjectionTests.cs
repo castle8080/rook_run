@@ -1,8 +1,10 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using RookRun.ObjectStore;
+using RookRun.Strava.Client;
 using RookRun.Strava.Client.Auth;
 using RookRun.Strava.DependencyInjection;
-using RookRun.Strava.Options;
+using RookRun.Strava.Repositories;
 
 namespace RookRun.UnitTest.Strava;
 
@@ -14,16 +16,16 @@ public class StravaDependencyInjectionTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                [$"{StravaOptions.SectionName}:ApiBaseUrl"] = "https://www.strava.com/api/v3",
-                [$"{StravaOptions.SectionName}:AuthorizationBaseUrl"] = "https://www.strava.com/oauth",
-                [$"{StravaOptions.SectionName}:ClientId"] = "client-id",
-                [$"{StravaOptions.SectionName}:ClientSecret"] = "client-secret",
-                [$"{StravaOptions.SectionName}:UseWindowsDpapi"] = "false"
+                [$"{StravaClientOptions.SectionName}:ApiBaseUrl"] = "https://www.strava.com/api/v3",
+                [$"{StravaClientOptions.SectionName}:AuthorizationBaseUrl"] = "https://www.strava.com/oauth",
+                [$"{StravaClientOptions.SectionName}:ClientId"] = "client-id",
+                [$"{StravaClientOptions.SectionName}:ClientSecret"] = "client-secret",
+                [$"{StravaClientOptions.SectionName}:UseWindowsDpapi"] = "false"
             })
             .Build();
 
         var services = new ServiceCollection();
-        services.AddStravaActivities(configuration.GetSection(StravaOptions.SectionName));
+        services.AddStravaActivities(configuration.GetSection(StravaClientOptions.SectionName));
 
         using var serviceProvider = services.BuildServiceProvider();
         var tokenStore = serviceProvider.GetRequiredService<IStravaTokenStore>();
@@ -37,16 +39,16 @@ public class StravaDependencyInjectionTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                [$"{StravaOptions.SectionName}:ApiBaseUrl"] = "https://www.strava.com/api/v3",
-                [$"{StravaOptions.SectionName}:AuthorizationBaseUrl"] = "https://www.strava.com/oauth",
-                [$"{StravaOptions.SectionName}:ClientId"] = "client-id",
-                [$"{StravaOptions.SectionName}:ClientSecret"] = "client-secret",
-                [$"{StravaOptions.SectionName}:UseWindowsDpapi"] = "true"
+                [$"{StravaClientOptions.SectionName}:ApiBaseUrl"] = "https://www.strava.com/api/v3",
+                [$"{StravaClientOptions.SectionName}:AuthorizationBaseUrl"] = "https://www.strava.com/oauth",
+                [$"{StravaClientOptions.SectionName}:ClientId"] = "client-id",
+                [$"{StravaClientOptions.SectionName}:ClientSecret"] = "client-secret",
+                [$"{StravaClientOptions.SectionName}:UseWindowsDpapi"] = "true"
             })
             .Build();
 
         var services = new ServiceCollection();
-        services.AddStravaActivities(configuration.GetSection(StravaOptions.SectionName));
+        services.AddStravaActivities(configuration.GetSection(StravaClientOptions.SectionName));
 
         using var serviceProvider = services.BuildServiceProvider();
         var tokenStore = serviceProvider.GetRequiredService<IStravaTokenStore>();
@@ -59,5 +61,29 @@ public class StravaDependencyInjectionTests
         {
             Assert.IsType<NullStravaTokenStore>(tokenStore);
         }
+    }
+
+    [Fact]
+    public void AddStravaActivities_RegistersObjectStoreStravaActivitiesRepository()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [$"{StravaClientOptions.SectionName}:ApiBaseUrl"] = "https://www.strava.com/api/v3",
+                [$"{StravaClientOptions.SectionName}:AuthorizationBaseUrl"] = "https://www.strava.com/oauth",
+                [$"{StravaClientOptions.SectionName}:ClientId"] = "client-id",
+                [$"{StravaClientOptions.SectionName}:ClientSecret"] = "client-secret",
+                [$"{StravaClientOptions.SectionName}:UseWindowsDpapi"] = "false"
+            })
+            .Build();
+
+        var services = new ServiceCollection();
+        services.AddSingleton<IObjectStore>(new InMemoryObjectStore());
+        services.AddStravaActivities(configuration.GetSection(StravaClientOptions.SectionName));
+
+        using var serviceProvider = services.BuildServiceProvider();
+        var repository = serviceProvider.GetRequiredService<IStravaActivitiesRepository>();
+
+        Assert.IsType<ObjectStoreStravaActivitiesRepository>(repository);
     }
 }

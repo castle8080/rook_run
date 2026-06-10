@@ -3,7 +3,6 @@ using Microsoft.Extensions.DependencyInjection;
 using RookRun.Strava.Client;
 using RookRun.Strava.DependencyInjection;
 using RookRun.Strava.Models;
-using RookRun.Strava.Options;
 using System.Reflection;
 using System.Text.Json;
 
@@ -45,14 +44,14 @@ public class StravaActivitiesTests
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                [$"{StravaOptions.SectionName}:ApiBaseUrl"] = "https://www.strava.com/api/v3",
-                [$"{StravaOptions.SectionName}:ClientId"] = "client-id",
-                [$"{StravaOptions.SectionName}:ClientSecret"] = "client-secret"
+                [$"{StravaClientOptions.SectionName}:ApiBaseUrl"] = "https://www.strava.com/api/v3",
+                [$"{StravaClientOptions.SectionName}:ClientId"] = "client-id",
+                [$"{StravaClientOptions.SectionName}:ClientSecret"] = "client-secret"
             })
             .Build();
 
         var services = new ServiceCollection();
-        services.AddStravaActivities(configuration.GetSection(StravaOptions.SectionName));
+        services.AddStravaActivities(configuration.GetSection(StravaClientOptions.SectionName));
 
         using var serviceProvider = services.BuildServiceProvider();
         var exception = Record.Exception(() => serviceProvider.GetRequiredService<IStravaActivitiesClient>());

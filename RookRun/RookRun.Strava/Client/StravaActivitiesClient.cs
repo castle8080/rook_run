@@ -1,7 +1,6 @@
 using Microsoft.Extensions.Options;
 using RookRun.Strava.Client.Auth;
 using RookRun.Strava.Models;
-using RookRun.Strava.Options;
 using System.Globalization;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
@@ -14,7 +13,7 @@ namespace RookRun.Strava.Client;
 public sealed class StravaActivitiesClient : IStravaActivitiesClient
 {
     private readonly IHttpClientFactory _httpClientFactory;
-    private readonly StravaOptions _options;
+    private readonly StravaClientOptions _options;
     private readonly IStravaAccessTokenProvider _accessTokenProvider;
 
     /// <summary>
@@ -23,7 +22,7 @@ public sealed class StravaActivitiesClient : IStravaActivitiesClient
     /// <param name="httpClientFactory">The HTTP client factory used to create Strava API clients.</param>
     /// <param name="options">The configured Strava client options.</param>
     /// <param name="accessTokenProvider">The Strava access token provider used to supply bearer tokens.</param>
-    public StravaActivitiesClient(IHttpClientFactory httpClientFactory, IOptions<StravaOptions> options, IStravaAccessTokenProvider accessTokenProvider)
+    public StravaActivitiesClient(IHttpClientFactory httpClientFactory, IOptions<StravaClientOptions> options, IStravaAccessTokenProvider accessTokenProvider)
     {
         _httpClientFactory = httpClientFactory ?? throw new ArgumentNullException(nameof(httpClientFactory));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
@@ -51,7 +50,7 @@ public sealed class StravaActivitiesClient : IStravaActivitiesClient
         return activities ?? [];
     }
 
-    private static void ValidateOptions(StravaOptions options)
+    private static void ValidateOptions(StravaClientOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentException.ThrowIfNullOrWhiteSpace(options.ApiBaseUrl);

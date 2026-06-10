@@ -1,4 +1,5 @@
 using Azure.Identity;
+using Azure.Storage;
 using Azure.Storage.Blobs;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,7 +17,7 @@ public static class ServiceCollectionExtensions
 
         services
             .AddOptions<ObjectStoreOptions>()
-            .Bind(configuration);
+            .Bind(configuration.GetSection("ObjectStore"));
 
         services.AddSingleton<ObjectStoreJsonOptions>();
         services.AddSingleton<IObjectStore>(static serviceProvider =>
@@ -58,8 +59,35 @@ public static class ServiceCollectionExtensions
             throw new InvalidOperationException("ObjectStore:AzureBlob:ContainerName must be configured when using the AzureBlob object store.");
         }
 
-        var serviceClient = new BlobServiceClient(new Uri(options.AzureBlob.ServiceUri), new DefaultAzureCredential());
+        var serviceClient = CreateBlobServiceClient(options.AzureBlob);
         var containerClient = serviceClient.GetBlobContainerClient(options.AzureBlob.ContainerName);
         return new AzureBlobObjectStore(containerClient, jsonOptions, options.AzureBlob.RootPrefix);
+    }
+
+    private static BlobServiceClient CreateBlobServiceClient(AzureBlobObjectStoreOptions options)
+    {
+        var serviceUri = new Uri(options.ServiceUri);
+
+        return options.Authentication switch
+        {
+            AzureBlobAuthenticationType.DefaultAzureCredential => new BlobServiceClient(serviceUri, new DefaultAzureCredential()),
+            AzureBlobAuthenticationType.SharedKey => new BlobServiceClient(serviceUri, CreateSharedKeyCredential(options)),
+            _ => throw new InvalidOperationException($"Unsupported Azure Blob authentication type '{options.Authentication}'.")
+        };
+    }
+
+    private static StorageSharedKeyCredential CreateSharedKeyCredential(AzureBlobObjectStoreOptions options)
+    {
+        if (string.IsNullOrWhiteSpace(options.AccountName))
+        {
+            throw new InvalidOperationException("ObjectStore:AzureBlob:AccountName must be configured when using shared key authentication.");
+        }
+
+        if (string.IsNullOrWhiteSpace(options.AccountKey))
+        {
+            throw new InvalidOperationException("ObjectStore:AzureBlob:AccountKey must be configured when using shared key authentication.");
+        }
+
+        return new StorageSharedKeyCredential(options.AccountName, options.AccountKey);
     }
 }

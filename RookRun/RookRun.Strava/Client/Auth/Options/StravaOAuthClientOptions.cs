@@ -10,7 +10,7 @@ public sealed record StravaOAuthClientOptions
     /// <summary>
     /// Gets the configuration section name used for Strava settings.
     /// </summary>
-    public const string SectionName = "Strava";
+    public const string SectionName = "StravaOAuthClient";
 
     /// <summary>
     /// Gets the Strava client identifier.
