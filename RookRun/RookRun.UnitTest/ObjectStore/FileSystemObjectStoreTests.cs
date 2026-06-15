@@ -19,9 +19,9 @@ public class FileSystemObjectStoreTests : IDisposable
         var deleted = await store.TryDeleteObjectAsync("runs/2026/one");
         var deletedAgain = await store.TryDeleteObjectAsync("runs/2026/one");
 
-        Assert.NotNull(loaded);
-        Assert.Equal(value.Name, loaded!.Name);
-        Assert.Equal(value.Count, loaded.Count);
+        Assert.True(loaded.IsFound);
+        Assert.Equal(value.Name, loaded.Value!.Name);
+        Assert.Equal(value.Count, loaded.Value.Count);
         Assert.Equal(new[] { "runs/2026/one" }, listed);
         Assert.True(deleted);
         Assert.False(deletedAgain);
@@ -38,13 +38,27 @@ public class FileSystemObjectStoreTests : IDisposable
     }
 
     [Fact]
-    public async Task TryReadObjectAsync_ReturnsNullWhenPathDoesNotExist()
+    public async Task TryReadObjectAsync_ReturnsNotFoundWhenPathDoesNotExist()
     {
         var store = new FileSystemObjectStore(rootDirectory);
 
         var loaded = await store.TryReadObjectAsync<ObjectStoreTestRecord>("missing/item");
 
-        Assert.Null(loaded);
+        Assert.True(loaded.IsNotFound);
+    }
+
+    [Fact]
+    public async Task TryReadObjectAsync_ReturnsNotModified_WhenObjectIsNotNewerThanCutoff()
+    {
+        var store = new FileSystemObjectStore(rootDirectory);
+        await store.StoreObjectAsync("runs/item", new ObjectStoreTestRecord { Name = "one" }, overwrite: false);
+
+        var initial = await store.TryReadObjectAsync<ObjectStoreTestRecord>("runs/item");
+        var notModified = await store.TryReadObjectAsync<ObjectStoreTestRecord>("runs/item", initial.LastModifiedUtc);
+
+        Assert.True(initial.IsFound);
+        Assert.True(notModified.IsNotModified);
+        Assert.Null(notModified.Value);
     }
 
     public void Dispose()

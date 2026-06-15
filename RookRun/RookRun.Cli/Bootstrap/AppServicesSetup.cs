@@ -5,7 +5,7 @@ using RookRun.Job.DependencyInjection;
 using RookRun.ObjectStore.DependencyInjection;
 using RookRun.Strava.DependencyInjection;
 
-namespace RookRun.Bootstrap;
+namespace RookRun.Cli.Bootstrap;
 
 internal static class AppServicesSetup
 {

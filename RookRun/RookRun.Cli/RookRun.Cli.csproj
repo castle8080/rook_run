@@ -5,8 +5,8 @@
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyName>RookRun</AssemblyName>
-    <RootNamespace>RookRun</RootNamespace>
+    <AssemblyName>RookRun.Cli</AssemblyName>
+    <RootNamespace>RookRun.Cli</RootNamespace>
     <UserSecretsId>3f5d9cec-77cf-4789-a7c4-2ec8836a8b03</UserSecretsId>
   </PropertyGroup>
 

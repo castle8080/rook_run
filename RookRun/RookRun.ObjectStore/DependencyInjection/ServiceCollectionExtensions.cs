@@ -15,9 +15,11 @@ public static class ServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
 
+        var objectStoreSection = ResolveOptionsSection(configuration, ObjectStoreOptions.SectionName);
+
         services
             .AddOptions<ObjectStoreOptions>()
-            .Bind(configuration.GetSection("ObjectStore"));
+            .Bind(objectStoreSection);
 
         services.AddSingleton<ObjectStoreJsonOptions>();
         services.AddSingleton<IObjectStore>(static serviceProvider =>
@@ -35,6 +37,17 @@ public static class ServiceCollectionExtensions
         });
 
         return services;
+    }
+
+    private static IConfiguration ResolveOptionsSection(IConfiguration configuration, string sectionName)
+    {
+        if (configuration is IConfigurationSection section &&
+            string.Equals(section.Key, sectionName, StringComparison.OrdinalIgnoreCase))
+        {
+            return configuration;
+        }
+
+        return configuration.GetSection(sectionName);
     }
 
     private static FileSystemObjectStore CreateFileSystemObjectStore(ObjectStoreOptions options, ObjectStoreJsonOptions jsonOptions)

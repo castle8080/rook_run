@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Hosting;
 
-namespace RookRun.Bootstrap;
+namespace RookRun.Cli.Bootstrap;
 
 internal static class AppHostFactory
 {

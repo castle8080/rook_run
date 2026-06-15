@@ -123,11 +123,13 @@ public sealed class ObjectStoreStravaActivitiesRepository : IStravaActivitiesRep
             .ThenBy(static group => group.Key.Month))
         {
             var path = BuildPath(group.Key);
-            var existing = await objectStore.TryReadObjectAsync<List<StravaActivity>>(path, cancellationToken);
-            if (existing is null)
+            var existingObject = await objectStore.TryReadObjectAsync<List<StravaActivity>>(path, cancellationToken: cancellationToken);
+            if (!existingObject.IsFound || existingObject.Value is null)
             {
                 continue;
             }
+
+            var existing = existingObject.Value;
 
             var idsToDelete = group.Select(static activity => activity.Id).ToHashSet();
             var remaining = existing
@@ -146,8 +148,8 @@ public sealed class ObjectStoreStravaActivitiesRepository : IStravaActivitiesRep
 
     private async Task<List<StravaActivity>> LoadActivitiesAsync(string path, CancellationToken cancellationToken)
     {
-        var activities = await objectStore.TryReadObjectAsync<List<StravaActivity>>(path, cancellationToken);
-        return activities ?? [];
+        var objectValue = await objectStore.TryReadObjectAsync<List<StravaActivity>>(path, cancellationToken: cancellationToken);
+        return objectValue.IsFound && objectValue.Value is not null ? objectValue.Value : [];
     }
 
     private string BuildPath(ActivityPartition partition)

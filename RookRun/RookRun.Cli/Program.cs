@@ -1,9 +1,9 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using RookRun.Bootstrap;
+using RookRun.Cli.Bootstrap;
 using RookRun.Job;
 
-namespace RookRun
+namespace RookRun.Cli
 {
     internal class Program
     {
@@ -19,8 +19,8 @@ namespace RookRun
                 {
                     // Get job to run
                     //var jobName = "SyncStravaActivitiesJob";
-                    var jobName = "StravaActivitiesExportJob";
-                    //var jobName = "ProcessGoogleHealthExportJob";
+                    //var jobName = "StravaActivitiesExportJob";
+                    var jobName = "CopyObjectStoreJob";
                     var job = host.Services.GetRequiredKeyedService<IJob>(jobName);
 
                     await job.ExecuteAsync(CancellationToken.None);

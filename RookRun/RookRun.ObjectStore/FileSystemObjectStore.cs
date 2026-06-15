@@ -1,24 +1,36 @@
 namespace RookRun.ObjectStore;
 
-public sealed class FileSystemObjectStore : IObjectStore
+/// <summary>
+/// A file-system-backed implementation of <see cref="IObjectStore"/>.
+/// </summary>
+public sealed class FileSystemObjectStore : ObjectStoreBase
 {
     private readonly string rootDirectory;
-    private readonly ObjectStoreSerialization serialization;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="FileSystemObjectStore"/> class with default JSON options.
+    /// </summary>
+    /// <param name="rootDirectory">The root directory in which objects are stored.</param>
     public FileSystemObjectStore(string rootDirectory)
         : this(rootDirectory, new ObjectStoreJsonOptions())
     {
     }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="FileSystemObjectStore"/> class.
+    /// </summary>
+    /// <param name="rootDirectory">The root directory in which objects are stored.</param>
+    /// <param name="options">JSON serialization options.</param>
     public FileSystemObjectStore(string rootDirectory, ObjectStoreJsonOptions options)
+        : base(new ObjectStoreSerialization(options))
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(rootDirectory);
 
         this.rootDirectory = Path.GetFullPath(rootDirectory);
-        serialization = new ObjectStoreSerialization(options);
     }
 
-    public Task<IReadOnlyList<string>> ListObjectsAsync(string prefix, CancellationToken cancellationToken = default)
+    /// <inheritdoc/>
+    public override Task<IReadOnlyList<string>> ListObjectsAsync(string prefix, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 
@@ -38,8 +50,11 @@ public sealed class FileSystemObjectStore : IObjectStore
         return Task.FromResult<IReadOnlyList<string>>(results);
     }
 
-    public async Task StoreObjectAsync<T>(string path, T obj, bool overwrite, CancellationToken cancellationToken = default)
+    /// <inheritdoc/>
+    public override async Task StoreStreamAsync(string path, Stream content, bool overwrite, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(content);
+
         var fullPath = GetFullPath(path);
         var directory = Path.GetDirectoryName(fullPath);
         if (!string.IsNullOrEmpty(directory))
@@ -50,22 +65,34 @@ public sealed class FileSystemObjectStore : IObjectStore
         var fileMode = overwrite ? FileMode.Create : FileMode.CreateNew;
 
         await using var stream = new FileStream(fullPath, fileMode, FileAccess.Write, FileShare.None, 81920, useAsync: true);
-        await serialization.SerializeAsync(stream, obj, cancellationToken);
+        await content.CopyToAsync(stream, cancellationToken);
     }
 
-    public async Task<T?> TryReadObjectAsync<T>(string path, CancellationToken cancellationToken = default)
+    /// <inheritdoc/>
+    public override async Task<ObjectStoreObject<Stream>> TryReadStreamAsync(string path, DateTimeOffset? ifNewerThanUtc = null, CancellationToken cancellationToken = default)
     {
         var fullPath = GetFullPath(path);
         if (!File.Exists(fullPath))
         {
-            return default;
+            return ObjectStoreObject<Stream>.NotFound();
         }
 
-        await using var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
-        return await serialization.DeserializeAsync<T>(stream, cancellationToken);
+        var lastModifiedUtc = new DateTimeOffset(File.GetLastWriteTimeUtc(fullPath));
+        if (ifNewerThanUtc.HasValue && lastModifiedUtc <= ifNewerThanUtc.Value)
+        {
+            return ObjectStoreObject<Stream>.NotModified(lastModifiedUtc);
+        }
+
+        // Buffer into memory so the file handle is not held open by the caller.
+        await using var fileStream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
+        var buffer = new MemoryStream();
+        await fileStream.CopyToAsync(buffer, cancellationToken);
+        buffer.Position = 0;
+        return ObjectStoreObject<Stream>.Found(buffer, lastModifiedUtc);
     }
 
-    public Task<bool> TryDeleteObjectAsync(string path, CancellationToken cancellationToken = default)
+    /// <inheritdoc/>
+    public override Task<bool> TryDeleteObjectAsync(string path, CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
 

@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 
-namespace RookRun.Bootstrap;
+namespace RookRun.Cli.Bootstrap;
 
 internal static class AppConfigurationSetup
 {

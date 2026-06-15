@@ -1,27 +1,42 @@
 using Azure;
 using Azure.Storage.Blobs;
+using Azure.Storage.Blobs.Models;
 
 namespace RookRun.ObjectStore;
 
-public sealed class AzureBlobObjectStore : IObjectStore
+/// <summary>
+/// An Azure Blob Storage-backed implementation of <see cref="IObjectStore"/>.
+/// </summary>
+public sealed class AzureBlobObjectStore : ObjectStoreBase
 {
     private readonly BlobContainerClient containerClient;
-    private readonly ObjectStoreSerialization serialization;
     private readonly string rootPrefix;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AzureBlobObjectStore"/> class with default JSON options.
+    /// </summary>
+    /// <param name="containerClient">The Azure blob container client.</param>
+    /// <param name="rootPrefix">An optional path prefix applied to all object paths.</param>
     public AzureBlobObjectStore(BlobContainerClient containerClient, string? rootPrefix = null)
         : this(containerClient, new ObjectStoreJsonOptions(), rootPrefix)
     {
     }
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="AzureBlobObjectStore"/> class.
+    /// </summary>
+    /// <param name="containerClient">The Azure blob container client.</param>
+    /// <param name="options">JSON serialization options.</param>
+    /// <param name="rootPrefix">An optional path prefix applied to all object paths.</param>
     public AzureBlobObjectStore(BlobContainerClient containerClient, ObjectStoreJsonOptions options, string? rootPrefix = null)
+        : base(new ObjectStoreSerialization(options))
     {
         this.containerClient = containerClient ?? throw new ArgumentNullException(nameof(containerClient));
-        serialization = new ObjectStoreSerialization(options);
         this.rootPrefix = NormalizeRootPrefix(rootPrefix);
     }
 
-    public async Task<IReadOnlyList<string>> ListObjectsAsync(string prefix, CancellationToken cancellationToken = default)
+    /// <inheritdoc/>
+    public override async Task<IReadOnlyList<string>> ListObjectsAsync(string prefix, CancellationToken cancellationToken = default)
     {
         var normalizedPrefix = ObjectStorePath.NormalizePrefix(prefix);
         var blobPrefix = rootPrefix + normalizedPrefix;
@@ -40,30 +55,54 @@ public sealed class AzureBlobObjectStore : IObjectStore
         return results;
     }
 
-    public async Task StoreObjectAsync<T>(string path, T obj, bool overwrite, CancellationToken cancellationToken = default)
+    /// <inheritdoc/>
+    public override async Task StoreStreamAsync(string path, Stream content, bool overwrite, CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(content);
+
         var blobClient = containerClient.GetBlobClient(GetBlobName(path));
-        await using var stream = await blobClient.OpenWriteAsync(overwrite: overwrite, cancellationToken: cancellationToken);
-        await serialization.SerializeAsync(stream, obj, cancellationToken);
+        await using var blobStream = await blobClient.OpenWriteAsync(overwrite: overwrite, cancellationToken: cancellationToken);
+        await content.CopyToAsync(blobStream, cancellationToken);
     }
 
-    public async Task<T?> TryReadObjectAsync<T>(string path, CancellationToken cancellationToken = default)
+    /// <inheritdoc/>
+    public override async Task<ObjectStoreObject<Stream>> TryReadStreamAsync(string path, DateTimeOffset? ifNewerThanUtc = null, CancellationToken cancellationToken = default)
     {
         var blobClient = containerClient.GetBlobClient(GetBlobName(path));
+        var downloadOptions = new BlobDownloadOptions();
+
+        if (ifNewerThanUtc.HasValue)
+        {
+            downloadOptions.Conditions = new BlobRequestConditions
+            {
+                IfModifiedSince = ifNewerThanUtc.Value
+            };
+        }
 
         try
         {
-            var response = await blobClient.DownloadStreamingAsync(cancellationToken: cancellationToken);
+            var response = await blobClient.DownloadStreamingAsync(downloadOptions, cancellationToken);
+
+            // Buffer into memory so the network connection is not held open by the caller.
             await using var content = response.Value.Content;
-            return await serialization.DeserializeAsync<T>(content, cancellationToken);
+            var buffer = new MemoryStream();
+            await content.CopyToAsync(buffer, cancellationToken);
+            buffer.Position = 0;
+
+            return ObjectStoreObject<Stream>.Found(buffer, response.Value.Details.LastModified, response.Value.Details.ETag.ToString());
+        }
+        catch (RequestFailedException ex) when (ex.Status == 304)
+        {
+            return ObjectStoreObject<Stream>.NotModified();
         }
         catch (RequestFailedException ex) when (ex.Status == 404)
         {
-            return default;
+            return ObjectStoreObject<Stream>.NotFound();
         }
     }
 
-    public async Task<bool> TryDeleteObjectAsync(string path, CancellationToken cancellationToken = default)
+    /// <inheritdoc/>
+    public override async Task<bool> TryDeleteObjectAsync(string path, CancellationToken cancellationToken = default)
     {
         var blobClient = containerClient.GetBlobClient(GetBlobName(path));
         var response = await blobClient.DeleteIfExistsAsync(cancellationToken: cancellationToken);

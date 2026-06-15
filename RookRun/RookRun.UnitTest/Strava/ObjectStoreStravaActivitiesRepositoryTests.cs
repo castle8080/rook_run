@@ -22,20 +22,20 @@ public class ObjectStoreStravaActivitiesRepositoryTests
             CreateActivity(1, new DateTimeOffset(2026, 3, 5, 6, 0, 0, TimeSpan.FromHours(-7)), "updated")
         ]);
 
-        var march = await store.TryReadObjectAsync<List<StravaActivity>>("history/strava_activities_2026-3.json.br");
-        var april = await store.TryReadObjectAsync<List<StravaActivity>>("history/strava_activities_2026-4.json.br");
+        var march = await store.TryReadObjectAsync<List<StravaActivity>>("history/strava_activities_2026-03.json.br");
+        var april = await store.TryReadObjectAsync<List<StravaActivity>>("history/strava_activities_2026-04.json.br");
 
-        Assert.NotNull(march);
-        Assert.NotNull(april);
+        Assert.True(march.IsFound);
+        Assert.True(april.IsFound);
         Assert.Collection(
-            march!,
+            march.Value!,
             activity =>
             {
                 Assert.Equal(1, activity.Id);
                 Assert.Equal("updated", activity.Name);
             },
             activity => Assert.Equal(2, activity.Id));
-        Assert.Collection(april!, activity => Assert.Equal(3, activity.Id));
+        Assert.Collection(april.Value!, activity => Assert.Equal(3, activity.Id));
     }
 
     [Fact]
@@ -51,12 +51,12 @@ public class ObjectStoreStravaActivitiesRepositoryTests
                 startDateLocal: new DateTimeOffset(2026, 3, 31, 23, 30, 0, TimeSpan.FromHours(-7)))
         ]);
 
-        var march = await store.TryReadObjectAsync<List<StravaActivity>>("history/strava_activities_2026-3.json.br");
-        var april = await store.TryReadObjectAsync<List<StravaActivity>>("history/strava_activities_2026-4.json.br");
+        var march = await store.TryReadObjectAsync<List<StravaActivity>>("history/strava_activities_2026-03.json.br");
+        var april = await store.TryReadObjectAsync<List<StravaActivity>>("history/strava_activities_2026-04.json.br");
 
-        Assert.Null(march);
-        Assert.NotNull(april);
-        Assert.Collection(april!, activity => Assert.Equal(1, activity.Id));
+        Assert.True(march.IsNotFound);
+        Assert.True(april.IsFound);
+        Assert.Collection(april.Value!, activity => Assert.Equal(1, activity.Id));
     }
 
     [Fact]
@@ -100,12 +100,12 @@ public class ObjectStoreStravaActivitiesRepositoryTests
             CreateActivity(99, new DateTimeOffset(2026, 5, 1, 8, 0, 0, TimeSpan.FromHours(-7)))
         ]);
 
-        var march = await store.TryReadObjectAsync<List<StravaActivity>>("history/strava_activities_2026-3.json.br");
-        var april = await store.TryReadObjectAsync<List<StravaActivity>>("history/strava_activities_2026-4.json.br");
+        var march = await store.TryReadObjectAsync<List<StravaActivity>>("history/strava_activities_2026-03.json.br");
+        var april = await store.TryReadObjectAsync<List<StravaActivity>>("history/strava_activities_2026-04.json.br");
 
-        Assert.NotNull(march);
-        Assert.Collection(march!, activity => Assert.Equal(1, activity.Id));
-        Assert.Null(april);
+        Assert.True(march.IsFound);
+        Assert.Collection(march.Value!, activity => Assert.Equal(1, activity.Id));
+        Assert.True(april.IsNotFound);
     }
 
     private static StravaActivity CreateActivity(long id, DateTimeOffset startDate, string? name = null, DateTimeOffset? startDateLocal = null) => new()

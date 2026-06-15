@@ -19,21 +19,26 @@ public static class ServiceCollectionExtensions
 
     public static IServiceCollection AddStravaActivities(this IServiceCollection services, IConfiguration configuration)
     {
+        var stravaClientSection = ResolveOptionsSection(configuration, StravaClientOptions.SectionName);
+        var stravaOAuthClientSection = ResolveOptionsSection(configuration, StravaOAuthClientOptions.SectionName);
+        var stravaTokenStoreSection = ResolveOptionsSection(configuration, "StravaTokenStore");
+        var stravaRepositorySection = ResolveOptionsSection(configuration, "StravaActivitiesRepository");
+
         services
             .AddOptions<StravaClientOptions>()
-            .Bind(configuration.GetSection("StravaClient"));
+            .Bind(stravaClientSection);
 
         services
             .AddOptions<StravaOAuthClientOptions>()
-            .Bind(configuration.GetSection("StravaOAuthClient"));
+            .Bind(stravaOAuthClientSection);
 
         services
             .AddOptions<StravaTokenStoreOptions>()
-            .Bind(configuration.GetSection("StravaTokenStore"));
+            .Bind(stravaTokenStoreSection);
 
         services
             .AddOptions<ObjectStoreStravaActivitiesRepositoryOptions>()
-            .Bind(configuration.GetSection("StravaActivitiesRepository"));
+            .Bind(stravaRepositorySection);
 
         services.AddHttpClient(HttpClientName, static (serviceProvider, httpClient) =>
         {
@@ -65,6 +70,17 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IStravaOAuthClient, StravaOAuthClient>();
 
         return services;
+    }
+
+    private static IConfiguration ResolveOptionsSection(IConfiguration configuration, string sectionName)
+    {
+        if (configuration is IConfigurationSection section &&
+            string.Equals(section.Key, sectionName, StringComparison.OrdinalIgnoreCase))
+        {
+            return configuration;
+        }
+
+        return configuration.GetSection(sectionName);
     }
 
     private static Uri BuildBaseUri(string baseUrl) => new($"{baseUrl.TrimEnd('/')}/");

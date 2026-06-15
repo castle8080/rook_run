@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Hosting;
 using Serilog;
 
-namespace RookRun.Bootstrap;
+namespace RookRun.Cli.Bootstrap;
 
 internal static class AppLoggingSetup
 {
