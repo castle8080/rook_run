@@ -7,6 +7,91 @@ namespace RookRun.UnitTest.Strava;
 public class ObjectStoreStravaActivitiesRepositoryTests
 {
     [Fact]
+    public async Task ListAsync_DefaultsToDescendingByStartDate()
+    {
+        var store = new InMemoryObjectStore();
+        var repository = new ObjectStoreStravaActivitiesRepository(store, "history");
+
+        await repository.SaveAllAsync([
+            CreateActivity(1, new DateTimeOffset(2026, 3, 1, 8, 0, 0, TimeSpan.Zero), type: "Run"),
+            CreateActivity(2, new DateTimeOffset(2026, 3, 2, 8, 0, 0, TimeSpan.Zero), type: "Ride"),
+            CreateActivity(3, new DateTimeOffset(2026, 3, 3, 8, 0, 0, TimeSpan.Zero), type: "Run")
+        ]);
+
+        var result = await repository.ListAsync(new ListStravaActivitiesQuery());
+
+        Assert.False(result.HasNextPage);
+        Assert.Collection(
+            result.Items,
+            activity => Assert.Equal(3, activity.Id),
+            activity => Assert.Equal(2, activity.Id),
+            activity => Assert.Equal(1, activity.Id));
+    }
+
+    [Fact]
+    public async Task ListAsync_AppliesPageAndPageSize()
+    {
+        var store = new InMemoryObjectStore();
+        var repository = new ObjectStoreStravaActivitiesRepository(store, "history");
+
+        await repository.SaveAllAsync([
+            CreateActivity(1, new DateTimeOffset(2026, 3, 1, 8, 0, 0, TimeSpan.Zero), type: "Run"),
+            CreateActivity(2, new DateTimeOffset(2026, 3, 2, 8, 0, 0, TimeSpan.Zero), type: "Run"),
+            CreateActivity(3, new DateTimeOffset(2026, 3, 3, 8, 0, 0, TimeSpan.Zero), type: "Run"),
+            CreateActivity(4, new DateTimeOffset(2026, 3, 4, 8, 0, 0, TimeSpan.Zero), type: "Run")
+        ]);
+
+        var result = await repository.ListAsync(new ListStravaActivitiesQuery
+        {
+            Page = 2,
+            PageSize = 2,
+            SortDirection = StravaActivitiesSortDirection.Desc
+        });
+
+        Assert.False(result.HasNextPage);
+        Assert.Equal(2, result.Page);
+        Assert.Equal(2, result.PageSize);
+        Assert.Collection(
+            result.Items,
+            activity => Assert.Equal(2, activity.Id),
+            activity => Assert.Equal(1, activity.Id));
+
+        var firstPage = await repository.ListAsync(new ListStravaActivitiesQuery
+        {
+            Page = 1,
+            PageSize = 2,
+            SortDirection = StravaActivitiesSortDirection.Desc
+        });
+
+        Assert.True(firstPage.HasNextPage);
+    }
+
+    [Fact]
+    public async Task ListAsync_FiltersByDateRangeAndActivityType()
+    {
+        var store = new InMemoryObjectStore();
+        var repository = new ObjectStoreStravaActivitiesRepository(store, "history");
+
+        await repository.SaveAllAsync([
+            CreateActivity(1, new DateTimeOffset(2026, 3, 1, 8, 0, 0, TimeSpan.Zero), type: "Run"),
+            CreateActivity(2, new DateTimeOffset(2026, 3, 15, 8, 0, 0, TimeSpan.Zero), type: "Ride"),
+            CreateActivity(3, new DateTimeOffset(2026, 3, 20, 8, 0, 0, TimeSpan.Zero), type: "Run"),
+            CreateActivity(4, new DateTimeOffset(2026, 4, 1, 8, 0, 0, TimeSpan.Zero), type: "Run")
+        ]);
+
+        var result = await repository.ListAsync(new ListStravaActivitiesQuery
+        {
+            StartDateUtc = new DateTimeOffset(2026, 3, 10, 0, 0, 0, TimeSpan.Zero),
+            EndDateUtc = new DateTimeOffset(2026, 3, 31, 23, 59, 59, TimeSpan.Zero),
+            ActivityType = "run",
+            SortDirection = StravaActivitiesSortDirection.Desc
+        });
+
+        Assert.False(result.HasNextPage);
+        Assert.Collection(result.Items, activity => Assert.Equal(3, activity.Id));
+    }
+
+    [Fact]
     public async Task SaveAllAsync_UpsertsByIdWithinEachMonthAndSortsByStartDate()
     {
         var store = new InMemoryObjectStore();
@@ -108,10 +193,18 @@ public class ObjectStoreStravaActivitiesRepositoryTests
         Assert.True(april.IsNotFound);
     }
 
-    private static StravaActivity CreateActivity(long id, DateTimeOffset startDate, string? name = null, DateTimeOffset? startDateLocal = null) => new()
+    private static StravaActivity CreateActivity(
+        long id,
+        DateTimeOffset startDate,
+        string? name = null,
+        DateTimeOffset? startDateLocal = null,
+        string? type = null,
+        string? sportType = null) => new()
     {
         Id = id,
         Name = name,
+        Type = type,
+        SportType = sportType,
         StartDate = startDate,
         StartDateLocal = startDateLocal ?? startDate
     };

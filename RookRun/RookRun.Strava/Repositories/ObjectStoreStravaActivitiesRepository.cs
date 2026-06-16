@@ -32,6 +32,54 @@ public sealed class ObjectStoreStravaActivitiesRepository : IStravaActivitiesRep
     }
 
     /// <summary>
+    /// Lists activities using optional date and type filters, ordered by start date, and paged.
+    /// </summary>
+    /// <param name="query">The list query options.</param>
+    /// <param name="cancellationToken">A token used to cancel the operation.</param>
+    /// <returns>A paged list result containing matching activities.</returns>
+    public async Task<ListStravaActivitiesResult> ListAsync(ListStravaActivitiesQuery query, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(query);
+        ValidateListQuery(query);
+
+        var objectPaths = await objectStore.ListObjectsAsync(prefix, cancellationToken);
+        var matches = new List<StravaActivity>();
+
+        foreach (var objectPath in objectPaths)
+        {
+            if (!TryParsePartition(objectPath, out var partition) || !IsPartitionInRange(partition, query.StartDateUtc, query.EndDateUtc))
+            {
+                continue;
+            }
+
+            var activities = await LoadActivitiesAsync(objectPath, cancellationToken);
+            matches.AddRange(activities.Where(activity => Matches(activity, query)));
+        }
+
+        var ordered = query.SortDirection == StravaActivitiesSortDirection.Asc
+            ? OrderAscending(matches)
+            : OrderDescending(matches);
+
+        var skip = (query.Page - 1) * query.PageSize;
+        var pagePlusOne = ordered
+            .Skip(skip)
+            .Take(query.PageSize + 1)
+            .ToArray();
+        var hasNextPage = pagePlusOne.Length > query.PageSize;
+        var pagedItems = hasNextPage
+            ? pagePlusOne.Take(query.PageSize).ToArray()
+            : pagePlusOne;
+
+        return new ListStravaActivitiesResult
+        {
+            Page = query.Page,
+            PageSize = query.PageSize,
+            HasNextPage = hasNextPage,
+            Items = pagedItems
+        };
+    }
+
+    /// <summary>
     /// Saves all activities into monthly partition files derived from <see cref="StravaActivity.StartDate"/>.
     /// Existing partition files are loaded first, activities are upserted by id, and the result is written
     /// back sorted by <see cref="StravaActivity.StartDate"/>.
@@ -162,6 +210,92 @@ public sealed class ObjectStoreStravaActivitiesRepository : IStravaActivitiesRep
         .OrderBy(static activity => activity.StartDate ?? DateTimeOffset.MinValue)
         .ThenBy(static activity => activity.Id)
         .ToArray();
+
+    private static List<StravaActivity> OrderAscending(IEnumerable<StravaActivity> activities) => activities
+        .OrderBy(static activity => activity.StartDate is null)
+        .ThenBy(static activity => activity.StartDate)
+        .ThenBy(static activity => activity.Id)
+        .ToList();
+
+    private static List<StravaActivity> OrderDescending(IEnumerable<StravaActivity> activities) => activities
+        .OrderBy(static activity => activity.StartDate is null)
+        .ThenByDescending(static activity => activity.StartDate)
+        .ThenByDescending(static activity => activity.Id)
+        .ToList();
+
+    private static bool Matches(StravaActivity activity, ListStravaActivitiesQuery query)
+    {
+        if (query.StartDateUtc is not null)
+        {
+            if (activity.StartDate is null || activity.StartDate.Value < query.StartDateUtc.Value)
+            {
+                return false;
+            }
+        }
+
+        if (query.EndDateUtc is not null)
+        {
+            if (activity.StartDate is null || activity.StartDate.Value > query.EndDateUtc.Value)
+            {
+                return false;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.ActivityType))
+        {
+            var activityType = query.ActivityType.Trim();
+            var matchesType = string.Equals(activity.Type, activityType, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(activity.SportType, activityType, StringComparison.OrdinalIgnoreCase);
+
+            if (!matchesType)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsPartitionInRange(ActivityPartition partition, DateTimeOffset? startDateUtc, DateTimeOffset? endDateUtc)
+    {
+        if (startDateUtc is not null)
+        {
+            var startPartition = new ActivityPartition(startDateUtc.Value.Year, startDateUtc.Value.Month);
+            if (partition.CompareTo(startPartition) < 0)
+            {
+                return false;
+            }
+        }
+
+        if (endDateUtc is not null)
+        {
+            var endPartition = new ActivityPartition(endDateUtc.Value.Year, endDateUtc.Value.Month);
+            if (partition.CompareTo(endPartition) > 0)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static void ValidateListQuery(ListStravaActivitiesQuery query)
+    {
+        if (query.Page < 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(query.Page), "Page must be greater than or equal to 1.");
+        }
+
+        if (query.PageSize < 1 || query.PageSize > ListStravaActivitiesQuery.MaxPageSize)
+        {
+            throw new ArgumentOutOfRangeException(nameof(query.PageSize), $"PageSize must be between 1 and {ListStravaActivitiesQuery.MaxPageSize}.");
+        }
+
+        if (query.StartDateUtc is not null && query.EndDateUtc is not null && query.StartDateUtc > query.EndDateUtc)
+        {
+            throw new ArgumentOutOfRangeException(nameof(query.StartDateUtc), "StartDateUtc must be less than or equal to EndDateUtc.");
+        }
+    }
 
     private static ActivityPartition GetRequiredPartition(StravaActivity activity)
     {

@@ -8,6 +8,14 @@ namespace RookRun.Strava.Repositories;
 public interface IStravaActivitiesRepository
 {
     /// <summary>
+    /// Lists activities using the supplied filters, ordering, and paging options.
+    /// </summary>
+    /// <param name="query">The list query options.</param>
+    /// <param name="cancellationToken">A token used to cancel the operation.</param>
+    /// <returns>A paged list result containing matching activities.</returns>
+    Task<ListStravaActivitiesResult> ListAsync(ListStravaActivitiesQuery query, CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Saves the supplied activities to the backing store.
     /// </summary>
     /// <param name="activities">The activities to save.</param>
