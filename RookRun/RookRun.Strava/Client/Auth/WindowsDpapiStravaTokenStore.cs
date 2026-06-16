@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using System.Runtime.Versioning;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -8,6 +9,7 @@ namespace RookRun.Strava.Client.Auth;
 /// <summary>
 /// Persists Strava token data to a DPAPI-protected file for the current Windows user.
 /// </summary>
+[SupportedOSPlatform("windows")]
 public sealed class WindowsDpapiStravaTokenStore : IStravaTokenStore
 {
     private static readonly JsonSerializerOptions SerializerOptions = new(JsonSerializerDefaults.Web);

@@ -73,6 +73,8 @@ public class StravaActivitiesTests
         var activity = JsonSerializer.Deserialize<StravaActivity>(json);
 
         Assert.NotNull(activity);
+        Assert.NotNull(activity!.StartLatLng);
+        Assert.NotNull(activity.EndLatLng);
         Assert.Equal([47.6062, -122.3321], activity!.StartLatLng);
         Assert.Equal([47.6205, -122.3493], activity.EndLatLng);
     }

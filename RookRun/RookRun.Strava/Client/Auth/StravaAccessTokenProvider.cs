@@ -52,7 +52,7 @@ public sealed class StravaAccessTokenProvider : IStravaAccessTokenProvider, IDis
 
             await SetCurrentTokenAsync(tokenResponse, cancellationToken);
 
-            return _accessToken;
+            return _accessToken!;
         }
         finally
         {
