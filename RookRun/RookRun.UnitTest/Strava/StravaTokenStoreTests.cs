@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using RookRun.ObjectStore;
 using RookRun.Strava.Client.Auth;
 using System.Runtime.Versioning;
 
@@ -6,6 +7,41 @@ namespace RookRun.UnitTest.Strava;
 
 public class StravaTokenStoreTests
 {
+    [Fact]
+    public async Task ObjectStoreStravaTokenStore_SaveAndLoad_RoundTripsToken()
+    {
+        var objectStore = new InMemoryObjectStore();
+        var store = new ObjectStoreStravaTokenStore(objectStore);
+        var expected = new StravaStoredToken
+        {
+            AccessToken = "access-token",
+            RefreshToken = "refresh-token",
+            AccessTokenExpiresAt = DateTimeOffset.UtcNow.AddMinutes(10)
+        };
+
+        await store.SaveAsync(expected);
+        var loaded = await store.LoadAsync();
+
+        Assert.NotNull(loaded);
+        Assert.Equal(expected.AccessToken, loaded!.AccessToken);
+        Assert.Equal(expected.RefreshToken, loaded.RefreshToken);
+        Assert.Equal(expected.AccessTokenExpiresAt, loaded.AccessTokenExpiresAt);
+
+        var stored = await objectStore.TryReadObjectAsync<StravaStoredToken>("secrets/strava/auth_token.json.br");
+        Assert.True(stored.IsFound);
+    }
+
+    [Fact]
+    public async Task ObjectStoreStravaTokenStore_LoadReturnsNull_WhenTokenIsMissing()
+    {
+        var objectStore = new InMemoryObjectStore();
+        var store = new ObjectStoreStravaTokenStore(objectStore);
+
+        var loaded = await store.LoadAsync();
+
+        Assert.Null(loaded);
+    }
+
     [Fact]
     public async Task NullStravaTokenStore_LoadReturnsNull_AndSaveDoesNotThrow()
     {

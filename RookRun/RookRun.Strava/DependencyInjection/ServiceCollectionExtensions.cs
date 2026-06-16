@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
+using RookRun.ObjectStore;
 using RookRun.Strava.Client;
 using RookRun.Strava.Client.Auth;
 using RookRun.Strava.Client.Auth.Browser;
@@ -21,7 +22,6 @@ public static class ServiceCollectionExtensions
     {
         var stravaClientSection = ResolveOptionsSection(configuration, StravaClientOptions.SectionName);
         var stravaOAuthClientSection = ResolveOptionsSection(configuration, StravaOAuthClientOptions.SectionName);
-        var stravaTokenStoreSection = ResolveOptionsSection(configuration, "StravaTokenStore");
         var stravaRepositorySection = ResolveOptionsSection(configuration, "StravaActivitiesRepository");
 
         services
@@ -31,10 +31,6 @@ public static class ServiceCollectionExtensions
         services
             .AddOptions<StravaOAuthClientOptions>()
             .Bind(stravaOAuthClientSection);
-
-        services
-            .AddOptions<StravaTokenStoreOptions>()
-            .Bind(stravaTokenStoreSection);
 
         services
             .AddOptions<ObjectStoreStravaActivitiesRepositoryOptions>()
@@ -54,13 +50,7 @@ public static class ServiceCollectionExtensions
             httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         });
 
-        services.AddSingleton<IStravaTokenStore>(static serviceProvider =>
-        {
-            var options = serviceProvider.GetRequiredService<IOptions<StravaTokenStoreOptions>>().Value;
-            return options.UseWindowsDpapi && OperatingSystem.IsWindows()
-                ? new WindowsDpapiStravaTokenStore(serviceProvider.GetRequiredService<IOptions<StravaTokenStoreOptions>>())
-                : new NullStravaTokenStore();
-        });
+        services.AddSingleton<IStravaTokenStore, ObjectStoreStravaTokenStore>();
         services.AddSingleton<IStravaAccessTokenProvider, RookRun.Strava.Client.Auth.StravaAccessTokenProvider>();
         services.AddSingleton<IStravaActivitiesClient, StravaActivitiesClient>();
         services.AddSingleton<IStravaActivitiesRepository, ObjectStoreStravaActivitiesRepository>();
