@@ -1,0 +1,107 @@
+@page "/jobs"
+@inject JobsApiClient JobsApiClient
+
+<PageTitle>Jobs</PageTitle>
+
+<section class="jobs-shell">
+    <header class="jobs-header">
+        <h1>Jobs</h1>
+        <p>Select a job and run it through the API host.</p>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(loadError))
+    {
+        <div class="alert alert-danger">@loadError</div>
+    }
+
+    <div class="jobs-form card">
+        <div class="card-body">
+            <label class="form-label" for="jobSelect">Available Job</label>
+            <select id="jobSelect" class="form-select" @bind="selectedJobName" disabled="@isLoadingJobs">
+                @foreach (var job in jobs)
+                {
+                    <option value="@job.Name">@job.DisplayName</option>
+                }
+            </select>
+            @if (selectedJob is not null)
+            {
+                <p class="job-description">@selectedJob.Description</p>
+            }
+            <button class="btn btn-primary" @onclick="RunSelectedJobAsync" disabled="@(isRunningJob || string.IsNullOrWhiteSpace(selectedJobName))">
+                @(isRunningJob ? "Running..." : "Run Job")
+            </button>
+        </div>
+    </div>
+
+    @if (lastRunResponse is not null)
+    {
+        <section class="run-result @(lastRunResponse.Succeeded ? "success" : "failure")">
+            <h2>@(lastRunResponse.Succeeded ? "Completed" : "Failed")</h2>
+            <p><strong>Job:</strong> @lastRunResponse.JobName</p>
+            <p><strong>Message:</strong> @lastRunResponse.Message</p>
+            <p><strong>Finished (UTC):</strong> @lastRunResponse.CompletedAtUtc.ToString("u")</p>
+        </section>
+    }
+</section>
+
+@code {
+    private IReadOnlyList<JobInfoDto> jobs = [];
+    private bool isLoadingJobs = true;
+    private bool isRunningJob;
+    private string selectedJobName = string.Empty;
+    private string? loadError;
+    private RunJobResponse? lastRunResponse;
+
+    private JobInfoDto? selectedJob => this.jobs.FirstOrDefault(job => job.Name == this.selectedJobName);
+
+    /// <summary>
+    /// Loads the available jobs when the page initializes.
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            this.jobs = await this.JobsApiClient.GetJobsAsync();
+            this.selectedJobName = this.jobs.FirstOrDefault()?.Name ?? string.Empty;
+        }
+        catch (Exception ex)
+        {
+            this.loadError = $"Unable to load jobs: {ex.Message}";
+        }
+        finally
+        {
+            this.isLoadingJobs = false;
+        }
+    }
+
+    /// <summary>
+    /// Runs the currently selected job and stores its result.
+    /// </summary>
+    private async Task RunSelectedJobAsync()
+    {
+        if (string.IsNullOrWhiteSpace(this.selectedJobName))
+        {
+            return;
+        }
+
+        this.isRunningJob = true;
+        try
+        {
+            this.lastRunResponse = await this.JobsApiClient.RunJobAsync(this.selectedJobName);
+        }
+        catch (Exception ex)
+        {
+            this.lastRunResponse = new RunJobResponse
+            {
+                JobName = this.selectedJobName,
+                Succeeded = false,
+                Message = ex.Message,
+                CompletedAtUtc = DateTimeOffset.UtcNow
+            };
+        }
+        finally
+        {
+            this.isRunningJob = false;
+        }
+    }
+}

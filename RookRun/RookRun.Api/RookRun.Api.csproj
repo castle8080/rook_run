@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UserSecretsId>285f9d2e-37d0-4e01-be06-619e96d40a10</UserSecretsId>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.9" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RookRun.Contracts\RookRun.Contracts.csproj" />
+    <ProjectReference Include="..\RookRun.Job\RookRun.Job.csproj" />
+    <ProjectReference Include="..\RookRun.ObjectStore\RookRun.ObjectStore.csproj" />
+    <ProjectReference Include="..\RookRun.Strava\RookRun.Strava.csproj" />
+    <ProjectReference Include="..\RookRun.GoogleHealth\RookRun.GoogleHealth.csproj" />
+    <ProjectReference Include="..\RookRun.Web\RookRun.Web.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+</Project>

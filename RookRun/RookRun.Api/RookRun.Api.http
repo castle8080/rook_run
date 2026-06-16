@@ -1,0 +1,6 @@
+@RookRun.Api_HostAddress = http://localhost:5231
+
+GET {{RookRun.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
