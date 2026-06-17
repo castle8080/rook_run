@@ -1,5 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
-using RookRun.Contracts;
+using RookRun.Contracts.Strava;
 using RookRun.Strava.Repositories;
 
 namespace RookRun.Api.Controllers;

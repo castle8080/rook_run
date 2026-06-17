@@ -1,4 +1,4 @@
-namespace RookRun.Contracts;
+namespace RookRun.Contracts.Strava;
 
 /// <summary>
 /// Represents a paged response for Strava activities.

@@ -1,4 +1,4 @@
-﻿namespace RookRun.Contracts;
+﻿namespace RookRun.Contracts.Jobs;
 
 /// <summary>
 /// Describes a runnable job that can be displayed and selected by clients.

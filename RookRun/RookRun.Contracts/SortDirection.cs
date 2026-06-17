@@ -1,4 +1,4 @@
-namespace RookRun.Contracts;
+namespace RookRun.Contracts.Strava;
 
 /// <summary>
 /// Specifies sort direction for list operations.

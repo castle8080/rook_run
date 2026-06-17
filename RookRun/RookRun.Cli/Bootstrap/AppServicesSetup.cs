@@ -1,6 +1,5 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using RookRun.GoogleHealth.DependencyInjection;
 using RookRun.Job.DependencyInjection;
 using RookRun.ObjectStore.DependencyInjection;
 using RookRun.Strava.DependencyInjection;
@@ -14,7 +13,6 @@ internal static class AppServicesSetup
         services
             .AddObjectStore(configuration)
             .AddStravaActivities(configuration)
-            .AddGoogleHealth(configuration)
             .AddJobs(configuration);
     }
 }

@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using RookRun.ObjectStore;
 using RookRun.Strava.Client;
 using RookRun.Strava.DependencyInjection;
 using RookRun.Strava.Models;
@@ -51,6 +52,7 @@ public class StravaActivitiesTests
             .Build();
 
         var services = new ServiceCollection();
+        services.AddSingleton<IObjectStore>(new InMemoryObjectStore());
         services.AddStravaActivities(configuration.GetSection(StravaClientOptions.SectionName));
 
         using var serviceProvider = services.BuildServiceProvider();

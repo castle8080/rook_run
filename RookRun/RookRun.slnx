@@ -1,7 +1,6 @@
 <Solution>
   <Project Path="RookRun.Common/RookRun.Common.csproj" Id="29e07eb4-e6b2-41e0-8bd6-b43832c88da3" />
   <Project Path="RookRun.Contracts/RookRun.Contracts.csproj" />
-  <Project Path="RookRun.GoogleHealth/RookRun.GoogleHealth.csproj" Id="aac52cff-82c4-4427-8cfd-8328e56f8711" />
   <Project Path="RookRun.Job/RookRun.Job.csproj" />
   <Project Path="RookRun.ObjectStore/RookRun.ObjectStore.csproj" Id="76c87f73-6f34-4995-8a3c-355c172e0f56" />
   <Project Path="RookRun.Strava/RookRun.Strava.csproj" Id="9b7edcfb-ad0c-472e-916c-8f18f8528a6f" />

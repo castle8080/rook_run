@@ -1,4 +1,4 @@
-namespace RookRun.Contracts;
+namespace RookRun.Contracts.Strava;
 
 /// <summary>
 /// Represents query parameters for listing Strava activities.

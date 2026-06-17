@@ -1,4 +1,3 @@
-using RookRun.GoogleHealth.DependencyInjection;
 using RookRun.Job.DependencyInjection;
 using RookRun.ObjectStore.DependencyInjection;
 using RookRun.Strava.DependencyInjection;
@@ -11,7 +10,6 @@ builder.Services.AddOpenApi();
 builder.Services
     .AddObjectStore(builder.Configuration)
     .AddStravaActivities(builder.Configuration)
-    .AddGoogleHealth(builder.Configuration)
     .AddJobs(builder.Configuration);
 
 var app = builder.Build();

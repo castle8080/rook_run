@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace RookRun.Contracts;
+namespace RookRun.Contracts.Strava;
 
 /// <summary>
 /// Represents a Strava activity returned by API endpoints.

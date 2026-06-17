@@ -9,11 +9,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="CsvHelper" Version="33.1.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.3" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\RookRun.GoogleHealth\RookRun.GoogleHealth.csproj" />
     <ProjectReference Include="..\RookRun.Strava\RookRun.Strava.csproj" />
   </ItemGroup>
 

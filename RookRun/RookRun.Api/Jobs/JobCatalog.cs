@@ -1,4 +1,4 @@
-using RookRun.Contracts;
+using RookRun.Contracts.Jobs;
 using RookRun.Job;
 
 namespace RookRun.Api.Jobs;
@@ -18,10 +18,6 @@ public static class JobCatalog
                 nameof(SyncStravaActivitiesJob),
                 "Sync Strava Activities",
                 "Synchronize new Strava activities into the local object store."),
-            [nameof(ProcessGoogleHealthExportJob)] = new(
-                nameof(ProcessGoogleHealthExportJob),
-                "Process Google Health Export",
-                "Parse Google Health export data and persist normalized workout records."),
             [nameof(StravaActivitiesExportJob)] = new(
                 nameof(StravaActivitiesExportJob),
                 "Export Strava Activities",

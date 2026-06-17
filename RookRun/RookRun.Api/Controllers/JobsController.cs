@@ -1,6 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using RookRun.Api.Jobs;
-using RookRun.Contracts;
+using RookRun.Contracts.Jobs;
 using RookRun.Job;
 
 namespace RookRun.Api.Controllers;

@@ -1,5 +1,5 @@
 using System.Net.Http.Json;
-using RookRun.Contracts;
+using RookRun.Contracts.Jobs;
 
 namespace RookRun.Web.Services;
 

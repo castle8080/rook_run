@@ -17,7 +17,6 @@
     <ProjectReference Include="..\RookRun.Job\RookRun.Job.csproj" />
     <ProjectReference Include="..\RookRun.ObjectStore\RookRun.ObjectStore.csproj" />
     <ProjectReference Include="..\RookRun.Strava\RookRun.Strava.csproj" />
-    <ProjectReference Include="..\RookRun.GoogleHealth\RookRun.GoogleHealth.csproj" />
     <ProjectReference Include="..\RookRun.Web\RookRun.Web.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
 

@@ -1,4 +1,4 @@
-namespace RookRun.Contracts;
+namespace RookRun.Contracts.Jobs;
 
 /// <summary>
 /// Represents a request to run a job by name.

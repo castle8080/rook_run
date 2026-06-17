@@ -1,6 +1,6 @@
 using System.Globalization;
 using System.Net.Http.Json;
-using RookRun.Contracts;
+using RookRun.Contracts.Strava;
 
 namespace RookRun.Web.Services;
 

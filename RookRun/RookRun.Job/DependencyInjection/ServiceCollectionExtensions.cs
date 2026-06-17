@@ -9,7 +9,6 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddJobs(this IServiceCollection services, IConfiguration configuration)
     {
         services.AddKeyedTransient<IJob, SyncStravaActivitiesJob>(nameof(SyncStravaActivitiesJob));
-        services.AddKeyedTransient<IJob, ProcessGoogleHealthExportJob>(nameof(ProcessGoogleHealthExportJob));
         services.AddKeyedTransient<IJob, StravaActivitiesExportJob>(nameof(StravaActivitiesExportJob));
         services.AddKeyedTransient<IJob, CopyObjectStoreJob>(nameof(CopyObjectStoreJob));
         return services;
