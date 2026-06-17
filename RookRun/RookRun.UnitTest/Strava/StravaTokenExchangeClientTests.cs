@@ -36,4 +36,46 @@ public class StravaOAuthClientTests
         Assert.Equal("bar", result.AdditionalData["foo"].GetString());
         Assert.Equal(json, result.RawResponseJson);
     }
+
+      [Fact]
+      public void ParseGrantedScopes_ParsesDistinctTrimmedScopes()
+      {
+        const string json = """
+          {
+            "scope": "activity:read_all, profile:read_all,activity:read_all"
+          }
+          """;
+
+        using var document = JsonDocument.Parse(json);
+        var scopes = StravaOAuthClient.ParseGrantedScopes(document.RootElement);
+
+        Assert.Equal(["activity:read_all", "profile:read_all"], scopes);
+      }
+
+      [Fact]
+      public void ParseGrantedScopes_ReturnsEmptyWhenScopeMissingOrBlank()
+      {
+        using var missingScopeDocument = JsonDocument.Parse("{}");
+        var missingScope = StravaOAuthClient.ParseGrantedScopes(missingScopeDocument.RootElement);
+
+        using var blankScopeDocument = JsonDocument.Parse("""{ "scope": "  " }""");
+        var blankScope = StravaOAuthClient.ParseGrantedScopes(blankScopeDocument.RootElement);
+
+        Assert.Empty(missingScope);
+        Assert.Empty(blankScope);
+      }
+
+      [Fact]
+      public void MapResult_ThrowsWhenRequiredFieldsAreMissing()
+      {
+        const string json = """
+          {
+            "token_type": "Bearer"
+          }
+          """;
+
+        using var document = JsonDocument.Parse(json);
+
+        Assert.Throws<KeyNotFoundException>(() => StravaOAuthClient.MapResult(document, json));
+      }
 }
