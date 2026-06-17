@@ -1,7 +1,10 @@
+using RookRun.Common.Exceptions;
+
 namespace RookRun.ObjectStore;
 
 /// <summary>
 /// A file-system-backed implementation of <see cref="IObjectStore"/>.
+/// Uses the file's last-write timestamp as an ETag in the format mtime:TICKS where TICKS is FileInfo.LastWriteTimeUtc.Ticks.
 /// </summary>
 public sealed class FileSystemObjectStore : ObjectStoreBase
 {
@@ -51,11 +54,33 @@ public sealed class FileSystemObjectStore : ObjectStoreBase
     }
 
     /// <inheritdoc/>
-    public override async Task StoreStreamAsync(string path, Stream content, bool overwrite, CancellationToken cancellationToken = default)
+    public override async Task StoreStreamAsync(string path, Stream content, bool overwrite, string? ifMatchETag = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(content);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!overwrite && ifMatchETag != null)
+        {
+            throw new ArgumentException("Cannot specify both overwrite=false and ifMatchETag. These semantics are conflicting.", nameof(ifMatchETag));
+        }
 
         var fullPath = GetFullPath(path);
+
+        if (ifMatchETag != null)
+        {
+            // Optimistic concurrency: ETag must match current file state
+            if (!File.Exists(fullPath))
+            {
+                throw new ObjectStorePreconditionFailedException($"Object at path '{path}' does not exist, but ETag condition was specified.");
+            }
+
+            var currentETag = GetFileETag(fullPath);
+            if (currentETag != ifMatchETag)
+            {
+                throw new ObjectStorePreconditionFailedException($"ETag mismatch at path '{path}'. Expected '{ifMatchETag}', but found '{currentETag}'.");
+            }
+        }
+
         var directory = Path.GetDirectoryName(fullPath);
         if (!string.IsNullOrEmpty(directory))
         {
@@ -64,13 +89,23 @@ public sealed class FileSystemObjectStore : ObjectStoreBase
 
         var fileMode = overwrite ? FileMode.Create : FileMode.CreateNew;
 
-        await using var stream = new FileStream(fullPath, fileMode, FileAccess.Write, FileShare.None, 81920, useAsync: true);
-        await content.CopyToAsync(stream, cancellationToken);
+        try
+        {
+            await using var stream = new FileStream(fullPath, fileMode, FileAccess.Write, FileShare.None, 81920, useAsync: true);
+            await content.CopyToAsync(stream, cancellationToken);
+        }
+        catch (IOException ex) when (!overwrite && File.Exists(fullPath))
+        {
+            // CreateNew failed because file exists
+            throw new IOException($"An object already exists at path '{path}'.", ex);
+        }
     }
 
     /// <inheritdoc/>
     public override async Task<ObjectStoreObject<Stream>> TryReadStreamAsync(string path, DateTimeOffset? ifNewerThanUtc = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var fullPath = GetFullPath(path);
         if (!File.Exists(fullPath))
         {
@@ -80,7 +115,8 @@ public sealed class FileSystemObjectStore : ObjectStoreBase
         var lastModifiedUtc = new DateTimeOffset(File.GetLastWriteTimeUtc(fullPath));
         if (ifNewerThanUtc.HasValue && lastModifiedUtc <= ifNewerThanUtc.Value)
         {
-            return ObjectStoreObject<Stream>.NotModified(lastModifiedUtc);
+            var notModifiedETag = GetFileETag(fullPath);
+            return ObjectStoreObject<Stream>.NotModified(lastModifiedUtc, notModifiedETag);
         }
 
         // Buffer into memory so the file handle is not held open by the caller.
@@ -88,7 +124,8 @@ public sealed class FileSystemObjectStore : ObjectStoreBase
         var buffer = new MemoryStream();
         await fileStream.CopyToAsync(buffer, cancellationToken);
         buffer.Position = 0;
-        return ObjectStoreObject<Stream>.Found(buffer, lastModifiedUtc);
+        var eTag = GetFileETag(fullPath);
+        return ObjectStoreObject<Stream>.Found(buffer, lastModifiedUtc, eTag);
     }
 
     /// <inheritdoc/>
@@ -104,6 +141,17 @@ public sealed class FileSystemObjectStore : ObjectStoreBase
 
         File.Delete(fullPath);
         return Task.FromResult(true);
+    }
+
+    /// <summary>
+    /// Generates an ETag for a file based on its last-write timestamp.
+    /// Format: mtime:TICKS where TICKS is the UTC last-write time in 100-nanosecond intervals.
+    /// </summary>
+    private static string GetFileETag(string fullPath)
+    {
+        var lastWriteUtc = File.GetLastWriteTimeUtc(fullPath);
+        var ticks = new DateTimeOffset(lastWriteUtc).Ticks;
+        return FormattableString.Invariant($"mtime:{ticks}");
     }
 
     private string GetFullPath(string objectPath)

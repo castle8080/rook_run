@@ -1,11 +1,13 @@
 using Azure;
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
+using RookRun.Common.Exceptions;
 
 namespace RookRun.ObjectStore;
 
 /// <summary>
 /// An Azure Blob Storage-backed implementation of <see cref="IObjectStore"/>.
+/// Uses the native Azure blob ETag as returned by the SDK.
 /// </summary>
 public sealed class AzureBlobObjectStore : ObjectStoreBase
 {
@@ -56,18 +58,53 @@ public sealed class AzureBlobObjectStore : ObjectStoreBase
     }
 
     /// <inheritdoc/>
-    public override async Task StoreStreamAsync(string path, Stream content, bool overwrite, CancellationToken cancellationToken = default)
+    public override async Task StoreStreamAsync(string path, Stream content, bool overwrite, string? ifMatchETag = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(content);
+        cancellationToken.ThrowIfCancellationRequested();
+
+        if (!overwrite && ifMatchETag != null)
+        {
+            throw new ArgumentException("Cannot specify both overwrite=false and ifMatchETag. These semantics are conflicting.", nameof(ifMatchETag));
+        }
 
         var blobClient = containerClient.GetBlobClient(GetBlobName(path));
-        await using var blobStream = await blobClient.OpenWriteAsync(overwrite: overwrite, cancellationToken: cancellationToken);
-        await content.CopyToAsync(blobStream, cancellationToken);
+
+        if (ifMatchETag != null)
+        {
+            // Optimistic concurrency: check ETag before writing
+            try
+            {
+                var properties = await blobClient.GetPropertiesAsync(cancellationToken: cancellationToken);
+                var currentETag = properties.Value.ETag.ToString();
+                if (currentETag != ifMatchETag)
+                {
+                    throw new ObjectStorePreconditionFailedException($"ETag mismatch at path '{path}'. Expected '{ifMatchETag}', but found '{currentETag}'.");
+                }
+            }
+            catch (RequestFailedException ex) when (ex.Status == 404)
+            {
+                throw new ObjectStorePreconditionFailedException($"Object at path '{path}' does not exist, but ETag condition was specified.", ex);
+            }
+        }
+
+        try
+        {
+            // Use OpenWriteAsync for the actual write
+            await using var blobStream = await blobClient.OpenWriteAsync(overwrite: overwrite, cancellationToken: cancellationToken);
+            await content.CopyToAsync(blobStream, cancellationToken);
+        }
+        catch (RequestFailedException ex) when (ex.Status == 409 && !overwrite)
+        {
+            throw new IOException($"An object already exists at path '{path}'.", ex);
+        }
     }
 
     /// <inheritdoc/>
     public override async Task<ObjectStoreObject<Stream>> TryReadStreamAsync(string path, DateTimeOffset? ifNewerThanUtc = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var blobClient = containerClient.GetBlobClient(GetBlobName(path));
         var downloadOptions = new BlobDownloadOptions();
 
@@ -89,11 +126,15 @@ public sealed class AzureBlobObjectStore : ObjectStoreBase
             await content.CopyToAsync(buffer, cancellationToken);
             buffer.Position = 0;
 
-            return ObjectStoreObject<Stream>.Found(buffer, response.Value.Details.LastModified, response.Value.Details.ETag.ToString());
+            var eTag = response.Value.Details.ETag.ToString();
+            return ObjectStoreObject<Stream>.Found(buffer, response.Value.Details.LastModified, eTag);
         }
         catch (RequestFailedException ex) when (ex.Status == 304)
         {
-            return ObjectStoreObject<Stream>.NotModified();
+            // Get the ETag for NotModified case
+            var properties = await blobClient.GetPropertiesAsync(cancellationToken: cancellationToken);
+            var eTag = properties.Value.ETag.ToString();
+            return ObjectStoreObject<Stream>.NotModified(properties.Value.LastModified, eTag);
         }
         catch (RequestFailedException ex) when (ex.Status == 404)
         {
@@ -104,6 +145,8 @@ public sealed class AzureBlobObjectStore : ObjectStoreBase
     /// <inheritdoc/>
     public override async Task<bool> TryDeleteObjectAsync(string path, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         var blobClient = containerClient.GetBlobClient(GetBlobName(path));
         var response = await blobClient.DeleteIfExistsAsync(cancellationToken: cancellationToken);
         return response.Value;

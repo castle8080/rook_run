@@ -59,7 +59,7 @@ public sealed class ObjectStoreCopier
                     if (result.IsFound)
                     {
                         await using var stream = result.Value!;
-                        await target.StoreStreamAsync(path, stream, overwrite: true, cancellationToken);
+                        await target.StoreStreamAsync(path, stream, overwrite: true, ifMatchETag: null, cancellationToken: cancellationToken);
                     }
                 }
                 finally

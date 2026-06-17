@@ -56,6 +56,6 @@ public sealed class ObjectStoreStravaTokenStore : IStravaTokenStore
     public async Task SaveAsync(StravaStoredToken token, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(token);
-        await objectStore.StoreObjectAsync(TokenPath, token, overwrite: true, cancellationToken);
+        await objectStore.StoreObjectAsync(TokenPath, token, overwrite: true, cancellationToken: cancellationToken);
     }
 }

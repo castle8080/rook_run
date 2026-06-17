@@ -1,3 +1,5 @@
+using RookRun.Common.Exceptions;
+
 namespace RookRun.ObjectStore;
 
 /// <summary>
@@ -23,7 +25,7 @@ public abstract class ObjectStoreBase : IObjectStore
     public abstract Task<IReadOnlyList<string>> ListObjectsAsync(string prefix, CancellationToken cancellationToken = default);
 
     /// <inheritdoc/>
-    public abstract Task StoreStreamAsync(string path, Stream content, bool overwrite, CancellationToken cancellationToken = default);
+    public abstract Task StoreStreamAsync(string path, Stream content, bool overwrite, string? ifMatchETag = null, CancellationToken cancellationToken = default);
 
     /// <inheritdoc/>
     public abstract Task<ObjectStoreObject<Stream>> TryReadStreamAsync(string path, DateTimeOffset? ifNewerThanUtc = null, CancellationToken cancellationToken = default);
@@ -34,12 +36,17 @@ public abstract class ObjectStoreBase : IObjectStore
     /// <summary>
     /// Serializes <paramref name="obj"/> and writes it to the store via <see cref="StoreStreamAsync"/>.
     /// </summary>
-    public async Task StoreObjectAsync<T>(string path, T obj, bool overwrite, CancellationToken cancellationToken = default)
+    public async Task StoreObjectAsync<T>(string path, T obj, bool overwrite, string? ifMatchETag = null, CancellationToken cancellationToken = default)
     {
+        if (!overwrite && ifMatchETag != null)
+        {
+            throw new ArgumentException("Cannot specify both overwrite=false and ifMatchETag. These semantics are conflicting.", nameof(ifMatchETag));
+        }
+
         await using var buffer = new MemoryStream();
         await serialization.SerializeAsync(buffer, obj, cancellationToken);
         buffer.Position = 0;
-        await StoreStreamAsync(path, buffer, overwrite, cancellationToken);
+        await StoreStreamAsync(path, buffer, overwrite, ifMatchETag, cancellationToken);
     }
 
     /// <summary>

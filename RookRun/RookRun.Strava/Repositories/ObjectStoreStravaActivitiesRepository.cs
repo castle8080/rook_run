@@ -101,7 +101,7 @@ public sealed class ObjectStoreStravaActivitiesRepository : IStravaActivitiesRep
             .ThenBy(static group => group.Key.Month))
         {
             var path = BuildPath(group.Key);
-            var existing = await LoadActivitiesAsync(path, cancellationToken);
+            var (existing, eTag) = await LoadActivitiesWithETagAsync(path, cancellationToken);
             var activitiesById = existing.ToDictionary(static activity => activity.Id);
 
             foreach (var activity in group)
@@ -109,7 +109,7 @@ public sealed class ObjectStoreStravaActivitiesRepository : IStravaActivitiesRep
                 activitiesById[activity.Id] = activity;
             }
 
-            await objectStore.StoreObjectAsync(path, SortActivities(activitiesById.Values), overwrite: true, cancellationToken);
+            await objectStore.StoreObjectAsync(path, SortActivities(activitiesById.Values), overwrite: true, ifMatchETag: eTag, cancellationToken: cancellationToken);
         }
     }
 
@@ -190,7 +190,7 @@ public sealed class ObjectStoreStravaActivitiesRepository : IStravaActivitiesRep
                 continue;
             }
 
-            await objectStore.StoreObjectAsync(path, SortActivities(remaining), overwrite: true, cancellationToken);
+            await objectStore.StoreObjectAsync(path, SortActivities(remaining), overwrite: true, ifMatchETag: existingObject.ETag, cancellationToken: cancellationToken);
         }
     }
 
@@ -198,6 +198,19 @@ public sealed class ObjectStoreStravaActivitiesRepository : IStravaActivitiesRep
     {
         var objectValue = await objectStore.TryReadObjectAsync<List<StravaActivity>>(path, cancellationToken: cancellationToken);
         return objectValue.IsFound && objectValue.Value is not null ? objectValue.Value : [];
+    }
+
+    /// <summary>
+    /// Loads activities from a partition file and returns both the activities and the ETag for optimistic concurrency.
+    /// </summary>
+    /// <param name="path">The path to the partition file.</param>
+    /// <param name="cancellationToken">A token used to cancel the operation.</param>
+    /// <returns>A tuple containing the activities list and the current ETag (null if file doesn't exist).</returns>
+    private async Task<(List<StravaActivity> Activities, string? ETag)> LoadActivitiesWithETagAsync(string path, CancellationToken cancellationToken)
+    {
+        var objectValue = await objectStore.TryReadObjectAsync<List<StravaActivity>>(path, cancellationToken: cancellationToken);
+        var activities = objectValue.IsFound && objectValue.Value is not null ? objectValue.Value : [];
+        return (activities, objectValue.ETag);
     }
 
     private string BuildPath(ActivityPartition partition)

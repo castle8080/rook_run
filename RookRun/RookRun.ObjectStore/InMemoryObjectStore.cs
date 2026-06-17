@@ -1,9 +1,11 @@
 using System.Collections.Concurrent;
+using RookRun.Common.Exceptions;
 
 namespace RookRun.ObjectStore;
 
 /// <summary>
 /// An in-memory implementation of <see cref="IObjectStore"/> backed by a concurrent dictionary.
+/// Uses opaque version tokens as ETags in the format v:N where N is incremented on each mutation.
 /// </summary>
 public sealed class InMemoryObjectStore : ObjectStoreBase
 {
@@ -41,24 +43,53 @@ public sealed class InMemoryObjectStore : ObjectStoreBase
     }
 
     /// <inheritdoc/>
-    public override async Task StoreStreamAsync(string path, Stream content, bool overwrite, CancellationToken cancellationToken = default)
+    public override async Task StoreStreamAsync(string path, Stream content, bool overwrite, string? ifMatchETag = null, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(content);
         cancellationToken.ThrowIfCancellationRequested();
+
+        if (!overwrite && ifMatchETag != null)
+        {
+            throw new ArgumentException("Cannot specify both overwrite=false and ifMatchETag. These semantics are conflicting.", nameof(ifMatchETag));
+        }
 
         var normalizedPath = ObjectStorePath.NormalizeRequiredPath(path);
 
         await using var buffer = new MemoryStream();
         await content.CopyToAsync(buffer, cancellationToken);
-        var storedObject = new StoredObject(buffer.ToArray(), DateTimeOffset.UtcNow);
+        var payload = buffer.ToArray();
+        var now = DateTimeOffset.UtcNow;
 
-        if (overwrite)
+        if (ifMatchETag != null)
         {
-            objects[normalizedPath] = storedObject;
+            // Optimistic concurrency: ETag must match
+            if (!objects.TryGetValue(normalizedPath, out var existing))
+            {
+                throw new ObjectStorePreconditionFailedException($"Object at path '{normalizedPath}' does not exist, but ETag condition was specified.");
+            }
+
+            if (existing.ETag != ifMatchETag)
+            {
+                throw new ObjectStorePreconditionFailedException($"ETag mismatch at path '{normalizedPath}'. Expected '{ifMatchETag}', but found '{existing.ETag}'.");
+            }
+
+            // Increment version on successful update
+            var newVersion = existing.Version + 1;
+            var updated = new StoredObject(payload, now, newVersion);
+            objects[normalizedPath] = updated;
             return;
         }
 
-        if (!objects.TryAdd(normalizedPath, storedObject))
+        if (overwrite)
+        {
+            // Unconditional overwrite or create; increment version if exists, otherwise start at 1
+            var newVersion = objects.TryGetValue(normalizedPath, out var existing) ? existing.Version + 1 : 1;
+            objects[normalizedPath] = new StoredObject(payload, now, newVersion);
+            return;
+        }
+
+        // overwrite=false, no ETag: only succeed if path does not exist
+        if (!objects.TryAdd(normalizedPath, new StoredObject(payload, now, 1)))
         {
             throw new IOException($"An object already exists at path '{normalizedPath}'.");
         }
@@ -77,11 +108,11 @@ public sealed class InMemoryObjectStore : ObjectStoreBase
 
         if (ifNewerThanUtc.HasValue && storedObject.LastModifiedUtc <= ifNewerThanUtc.Value)
         {
-            return Task.FromResult(ObjectStoreObject<Stream>.NotModified(storedObject.LastModifiedUtc));
+            return Task.FromResult(ObjectStoreObject<Stream>.NotModified(storedObject.LastModifiedUtc, storedObject.ETag));
         }
 
         Stream stream = new MemoryStream(storedObject.Payload, writable: false);
-        return Task.FromResult(ObjectStoreObject<Stream>.Found(stream, storedObject.LastModifiedUtc));
+        return Task.FromResult(ObjectStoreObject<Stream>.Found(stream, storedObject.LastModifiedUtc, storedObject.ETag));
     }
 
     /// <inheritdoc/>
@@ -93,5 +124,11 @@ public sealed class InMemoryObjectStore : ObjectStoreBase
         return Task.FromResult(objects.TryRemove(normalizedPath, out _));
     }
 
-    private sealed record StoredObject(byte[] Payload, DateTimeOffset LastModifiedUtc);
+    private sealed record StoredObject(byte[] Payload, DateTimeOffset LastModifiedUtc, long Version)
+    {
+        /// <summary>
+        /// Gets the ETag in the format v:N where N is the version number.
+        /// </summary>
+        public string ETag => FormattableString.Invariant($"v:{Version}");
+    }
 }
