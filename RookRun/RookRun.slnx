@@ -7,5 +7,6 @@
   <Project Path="RookRun.UnitTest/RookRun.UnitTest.csproj" Id="1fccb53c-e701-46c2-aa6e-e1f4921046f3" />
   <Project Path="RookRun.Api/RookRun.Api.csproj" />
   <Project Path="RookRun.Cli/RookRun.Cli.csproj" />
+  <Project Path="RookRun.Web.UnitTest/RookRun.Web.UnitTest.csproj" />
   <Project Path="RookRun.Web/RookRun.Web.csproj" />
 </Solution>

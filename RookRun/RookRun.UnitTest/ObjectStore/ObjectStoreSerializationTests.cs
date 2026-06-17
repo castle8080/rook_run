@@ -152,6 +152,7 @@ public class ObjectStoreSerializationTests
         var deserialized = await serialization.DeserializeAsync<ObjectStoreTestRecord>(bytes);
 
         Assert.NotNull(deserialized);
+        Assert.NotNull(deserialized.Name);
         Assert.Empty(deserialized.Name);
     }
 
