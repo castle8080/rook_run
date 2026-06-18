@@ -68,6 +68,41 @@ public sealed class StravaActivityDetailClient : IStravaActivityDetailClient
     }
 
     /// <inheritdoc />
+    public async Task<IReadOnlyList<StravaActivityImage>> GetActivityPhotosAsync(
+        long activityId,
+        CancellationToken cancellationToken = default)
+    {
+        if (activityId <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(activityId), "Activity ID must be greater than zero.");
+        }
+
+        var httpClient = _httpClientFactory.CreateClient("StravaActivities");
+        var uri = $"activities/{activityId.ToString(CultureInfo.InvariantCulture)}/photos?size=600";
+        using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", await _accessTokenProvider.GetAccessTokenAsync(cancellationToken));
+
+        using var response = await httpClient.SendAsync(request, cancellationToken);
+
+        if (response.StatusCode == HttpStatusCode.NotFound)
+        {
+            return Array.Empty<StravaActivityImage>();
+        }
+
+        await EnsureSuccessAsync(response, cancellationToken);
+
+        var payload = await response.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: cancellationToken);
+        var images = new List<StravaActivityImage>();
+
+        ExtractPhotosEndpointImages(payload, activityId, images);
+
+        return images
+            .GroupBy(image => image.ImageId, StringComparer.Ordinal)
+            .Select(group => group.First())
+            .ToList();
+    }
+
+    /// <inheritdoc />
     public IReadOnlyList<StravaActivityImage> ExtractActivityImages(
         StravaActivityDetail activityDetail)
     {
@@ -205,6 +240,56 @@ public sealed class StravaActivityDetailClient : IStravaActivityDetailClient
             {
                 images.Add(CreateImageFromUrl(activityId, imageId, bestUrl, bestSizeKey!));
             }
+        }
+    }
+
+    /// <summary>
+    /// Extracts image records from the activity photos endpoint payload.
+    /// The endpoint shape can vary across API versions and clients.
+    /// </summary>
+    private static void ExtractPhotosEndpointImages(
+        JsonElement payload,
+        long activityId,
+        List<StravaActivityImage> images)
+    {
+        if (payload.ValueKind == JsonValueKind.Array)
+        {
+            var index = 0;
+            foreach (var photo in payload.EnumerateArray())
+            {
+                ExtractPhotoUrls(photo, activityId, images, $"photo_{index}");
+                index++;
+            }
+
+            return;
+        }
+
+        if (payload.ValueKind != JsonValueKind.Object)
+        {
+            return;
+        }
+
+        if (payload.TryGetProperty("photos", out var photosArray) && photosArray.ValueKind == JsonValueKind.Array)
+        {
+            var index = 0;
+            foreach (var photo in photosArray.EnumerateArray())
+            {
+                ExtractPhotoUrls(photo, activityId, images, $"photo_{index}");
+                index++;
+            }
+
+            return;
+        }
+
+        if (payload.TryGetProperty("primary", out var primaryPhoto))
+        {
+            ExtractPhotoUrls(primaryPhoto, activityId, images, "primary");
+            return;
+        }
+
+        if (payload.TryGetProperty("urls", out _))
+        {
+            ExtractPhotoUrls(payload, activityId, images, "photo_0");
         }
     }
 

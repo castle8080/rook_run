@@ -69,6 +69,9 @@ public sealed class SyncStravaActivityImageSynchronizer
         var cachedImageKeys = (await _imageRepository.ListImageKeysAsync(cancellationToken))
             .Where(key => sourceActivityIds.Contains(key.ActivityId))
             .ToHashSet();
+        var cachedImageCountsByActivity = cachedImageKeys
+            .GroupBy(key => key.ActivityId)
+            .ToDictionary(group => group.Key, group => group.Count());
 
         var imagesToDownload = new List<StravaActivityImage>();
         var expectedImageKeyCount = 0;
@@ -84,14 +87,37 @@ public sealed class SyncStravaActivityImageSynchronizer
                     continue;
                 }
 
-                var images = _client.ExtractActivityImages(detail);
+                var expectedPhotoCount = GetExpectedPhotoCount(detail);
+                var cachedImageCount = cachedImageCountsByActivity.GetValueOrDefault(activityId, 0);
+
+                if (expectedPhotoCount > 0 && cachedImageCount >= expectedPhotoCount)
+                {
+                    _logger.LogDebug(
+                        "Activity {ActivityId} already has {CachedCount}/{ExpectedCount} images cached, skipping photo lookup",
+                        activityId,
+                        cachedImageCount,
+                        expectedPhotoCount);
+                    continue;
+                }
+
+                IReadOnlyList<StravaActivityImage> images;
+                if (expectedPhotoCount > 0)
+                {
+                    images = await TryGetActivityPhotosAsync(activityId, detail, cancellationToken);
+                }
+                else
+                {
+                    images = _client.ExtractActivityImages(detail);
+                }
+
                 if (images.Count == 0)
                 {
                     _logger.LogDebug("Activity {ActivityId} has no images", activityId);
                     continue;
                 }
 
-                expectedImageKeyCount += images.Count;
+                images = DistinctByImageId(images);
+                expectedImageKeyCount += expectedPhotoCount > 0 ? expectedPhotoCount : images.Count;
 
                 foreach (var image in images)
                 {
@@ -212,5 +238,66 @@ public sealed class SyncStravaActivityImageSynchronizer
         {
             semaphore.Release();
         }
+    }
+
+    /// <summary>
+    /// Loads activity photos via API and falls back to detail extraction if the photos endpoint fails.
+    /// </summary>
+    private async Task<IReadOnlyList<StravaActivityImage>> TryGetActivityPhotosAsync(
+        long activityId,
+        StravaActivityDetail detail,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var activityPhotos = await _client.GetActivityPhotosAsync(activityId, cancellationToken);
+            if (activityPhotos.Count > 0)
+            {
+                return activityPhotos;
+            }
+
+            return _client.ExtractActivityImages(detail);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Failed to load full photo list for activity {ActivityId}; falling back to detail photo extraction.",
+                activityId);
+            return _client.ExtractActivityImages(detail);
+        }
+    }
+
+    /// <summary>
+    /// Removes duplicate images by Strava image ID.
+    /// </summary>
+    private static IReadOnlyList<StravaActivityImage> DistinctByImageId(
+        IReadOnlyList<StravaActivityImage> images)
+    {
+        var byId = new Dictionary<string, StravaActivityImage>(StringComparer.Ordinal);
+
+        foreach (var image in images)
+        {
+            byId[image.ImageId] = image;
+        }
+
+        return byId.Values.ToList();
+    }
+
+    /// <summary>
+    /// Determines the expected number of photos for an activity from detail metadata.
+    /// </summary>
+    private static int GetExpectedPhotoCount(StravaActivityDetail detail)
+    {
+        if (detail.TotalPhotoCount > 0)
+        {
+            return detail.TotalPhotoCount;
+        }
+
+        return detail.PhotoCount;
     }
 }

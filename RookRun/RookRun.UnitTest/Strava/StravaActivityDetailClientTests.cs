@@ -181,6 +181,70 @@ public sealed class StravaActivityDetailClientTests
     }
 
     /// <summary>
+    /// Verifies GetActivityPhotosAsync parses activity photos endpoint arrays.
+    /// </summary>
+    [Fact]
+    public async Task GetActivityPhotosAsync_ExtractsPhotoArray()
+    {
+        HttpRequestMessage? capturedRequest = null;
+
+        var handler = new StubHttpMessageHandler((request, _) =>
+        {
+            capturedRequest = request;
+            const string payload = @"[
+                {
+                    ""unique_id"": ""photo-a"",
+                    ""urls"": {
+                        ""100"": ""https://example.com/a_100.jpg"",
+                        ""600"": ""https://example.com/a_600.jpg""
+                    }
+                },
+                {
+                    ""unique_id"": ""photo-b"",
+                    ""urls"": {
+                        ""600"": ""https://example.com/b_600.jpg""
+                    }
+                }
+            ]";
+
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(payload, Encoding.UTF8, "application/json")
+            });
+        });
+
+        var client = CreateClient(handler, "token-xyz");
+
+        var images = await client.GetActivityPhotosAsync(456);
+
+        Assert.Equal(2, images.Count);
+        Assert.Contains(images, img => img.ImageId == "photo-a" && img.ImageUrl == "https://example.com/a_600.jpg");
+        Assert.Contains(images, img => img.ImageId == "photo-b" && img.ImageUrl == "https://example.com/b_600.jpg");
+        Assert.NotNull(capturedRequest);
+        Assert.Equal(HttpMethod.Get, capturedRequest!.Method);
+        Assert.Contains("activities/456/photos", capturedRequest.RequestUri!.PathAndQuery, StringComparison.Ordinal);
+        Assert.Contains("size=600", capturedRequest.RequestUri!.PathAndQuery, StringComparison.Ordinal);
+        Assert.Equal("Bearer", capturedRequest.Headers.Authorization?.Scheme);
+        Assert.Equal("token-xyz", capturedRequest.Headers.Authorization?.Parameter);
+    }
+
+    /// <summary>
+    /// Verifies GetActivityPhotosAsync handles not found by returning an empty set.
+    /// </summary>
+    [Fact]
+    public async Task GetActivityPhotosAsync_ReturnsEmptyFor404()
+    {
+        var handler = new StubHttpMessageHandler((_, _) =>
+            Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound)));
+
+        var client = CreateClient(handler, "token-xyz");
+
+        var images = await client.GetActivityPhotosAsync(999);
+
+        Assert.Empty(images);
+    }
+
+    /// <summary>
     /// Verifies invalid URLs are rejected.
     /// </summary>
     [Fact]

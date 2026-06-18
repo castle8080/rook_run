@@ -29,6 +29,20 @@ public interface IStravaActivityDetailClient
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Gets all photos available for an activity using Strava's activity photos endpoint.
+    /// This complements activity detail payloads that only expose a primary photo plus count metadata.
+    /// </summary>
+    /// <param name="activityId">The activity ID whose photos should be listed.</param>
+    /// <param name="cancellationToken">A token used to cancel the operation.</param>
+    /// <returns>
+    /// Collection of image metadata records with URLs and extensions.
+    /// Returns an empty collection when no photos are found.
+    /// </returns>
+    Task<IReadOnlyList<StravaActivityImage>> GetActivityPhotosAsync(
+        long activityId,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Extracts image metadata from a detailed activity's photos object.
     /// Parses the photos.primary and photos array to produce image records ready for download.
     /// Does not perform any network operations.

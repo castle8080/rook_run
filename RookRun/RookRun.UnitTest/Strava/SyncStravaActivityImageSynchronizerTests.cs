@@ -207,6 +207,135 @@ public sealed class SyncStravaActivityImageSynchronizerTests
     }
 
     /// <summary>
+    /// Verifies synchronizer fetches full activity photos when detail metadata indicates more than the primary image.
+    /// </summary>
+    [Fact]
+    public async Task SyncAsync_UsesActivityPhotosEndpointWhenCountsIndicateAdditionalPhotos()
+    {
+        var logger = new Mock<ILogger<SyncStravaActivityImageSynchronizer>>();
+        var client = new Mock<IStravaActivityDetailClient>();
+        var detailRepository = new Mock<IStravaActivityDetailRepository>();
+        var imageRepository = new Mock<IStravaActivityImageRepository>();
+
+        var detail = new StravaActivityDetail { Id = 333, Name = "Activity", TotalPhotoCount = 3 };
+        var primaryOnly = new List<StravaActivityImage>
+        {
+            new() { ActivityId = 333, ImageId = "img-1", ImageUrl = "https://example.com/1.jpg", Extension = "jpg" }
+        };
+
+        var allPhotos = new List<StravaActivityImage>
+        {
+            new() { ActivityId = 333, ImageId = "img-1", ImageUrl = "https://example.com/1.jpg", Extension = "jpg" },
+            new() { ActivityId = 333, ImageId = "img-2", ImageUrl = "https://example.com/2.jpg", Extension = "jpg" },
+            new() { ActivityId = 333, ImageId = "img-3", ImageUrl = "https://example.com/3.jpg", Extension = "jpg" }
+        };
+
+        detailRepository.Setup(r => r.GetByIdAsync(333, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(detail);
+
+        client.Setup(c => c.ExtractActivityImages(detail))
+            .Returns(primaryOnly);
+
+        client.Setup(c => c.GetActivityPhotosAsync(333, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(allPhotos);
+
+        imageRepository.Setup(r => r.ListImageKeysAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<StravaActivityImageKey>());
+
+        client.Setup(c => c.DownloadImageAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new byte[] { 0x01, 0x02 });
+
+        imageRepository.Setup(r => r.SaveImageAsync(It.IsAny<long>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<byte[]>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var synchronizer = new SyncStravaActivityImageSynchronizer(logger.Object, client.Object, detailRepository.Object, imageRepository.Object);
+
+        var result = await synchronizer.SyncAsync([333]);
+
+        Assert.Equal(3, result);
+        client.Verify(c => c.GetActivityPhotosAsync(333, It.IsAny<CancellationToken>()), Times.Once);
+        imageRepository.Verify(r => r.SaveImageAsync(333, "img-1", "jpg", It.IsAny<byte[]>(), It.IsAny<CancellationToken>()), Times.Once);
+        imageRepository.Verify(r => r.SaveImageAsync(333, "img-2", "jpg", It.IsAny<byte[]>(), It.IsAny<CancellationToken>()), Times.Once);
+        imageRepository.Verify(r => r.SaveImageAsync(333, "img-3", "jpg", It.IsAny<byte[]>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
+    /// Verifies synchronizer skips photo endpoint lookup when cached count matches expected detail photo count.
+    /// </summary>
+    [Fact]
+    public async Task SyncAsync_DoesNotCallActivityPhotosEndpointWhenCacheCountIsUpToDate()
+    {
+        var logger = new Mock<ILogger<SyncStravaActivityImageSynchronizer>>();
+        var client = new Mock<IStravaActivityDetailClient>();
+        var detailRepository = new Mock<IStravaActivityDetailRepository>();
+        var imageRepository = new Mock<IStravaActivityImageRepository>();
+
+        var detail = new StravaActivityDetail { Id = 444, Name = "Activity", TotalPhotoCount = 2 };
+
+        detailRepository.Setup(r => r.GetByIdAsync(444, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(detail);
+
+        imageRepository.Setup(r => r.ListImageKeysAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync([
+                new StravaActivityImageKey(444, "img-1"),
+                new StravaActivityImageKey(444, "img-2")
+            ]);
+
+        var synchronizer = new SyncStravaActivityImageSynchronizer(logger.Object, client.Object, detailRepository.Object, imageRepository.Object);
+
+        var result = await synchronizer.SyncAsync([444]);
+
+        Assert.Equal(0, result);
+        client.Verify(c => c.GetActivityPhotosAsync(444, It.IsAny<CancellationToken>()), Times.Never);
+        client.Verify(c => c.DownloadImageAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+    }
+
+    /// <summary>
+    /// Verifies synchronizer de-duplicates duplicate image IDs returned by photo lookup before saving.
+    /// </summary>
+    [Fact]
+    public async Task SyncAsync_DeduplicatesDuplicateImageIdsFromPhotoLookup()
+    {
+        var logger = new Mock<ILogger<SyncStravaActivityImageSynchronizer>>();
+        var client = new Mock<IStravaActivityDetailClient>();
+        var detailRepository = new Mock<IStravaActivityDetailRepository>();
+        var imageRepository = new Mock<IStravaActivityImageRepository>();
+
+        var detail = new StravaActivityDetail { Id = 555, Name = "Activity", TotalPhotoCount = 2 };
+        var photos = new List<StravaActivityImage>
+        {
+            new() { ActivityId = 555, ImageId = "img-1", ImageUrl = "https://example.com/1a.jpg", Extension = "jpg" },
+            new() { ActivityId = 555, ImageId = "img-1", ImageUrl = "https://example.com/1b.jpg", Extension = "jpg" },
+            new() { ActivityId = 555, ImageId = "img-2", ImageUrl = "https://example.com/2.jpg", Extension = "jpg" }
+        };
+
+        detailRepository.Setup(r => r.GetByIdAsync(555, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(detail);
+
+        client.Setup(c => c.GetActivityPhotosAsync(555, It.IsAny<CancellationToken>()))
+            .ReturnsAsync(photos);
+
+        imageRepository.Setup(r => r.ListImageKeysAsync(It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<StravaActivityImageKey>());
+
+        client.Setup(c => c.DownloadImageAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new byte[] { 0x01, 0x02 });
+
+        imageRepository.Setup(r => r.SaveImageAsync(It.IsAny<long>(), It.IsAny<string>(), It.IsAny<string>(),
+            It.IsAny<byte[]>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+
+        var synchronizer = new SyncStravaActivityImageSynchronizer(logger.Object, client.Object, detailRepository.Object, imageRepository.Object);
+
+        var result = await synchronizer.SyncAsync([555]);
+
+        Assert.Equal(2, result);
+        imageRepository.Verify(r => r.SaveImageAsync(555, "img-1", "jpg", It.IsAny<byte[]>(), It.IsAny<CancellationToken>()), Times.Once);
+        imageRepository.Verify(r => r.SaveImageAsync(555, "img-2", "jpg", It.IsAny<byte[]>(), It.IsAny<CancellationToken>()), Times.Once);
+    }
+
+    /// <summary>
     /// Verifies synchronizer retries rate-limit responses before saving the image.
     /// </summary>
     [Fact]
