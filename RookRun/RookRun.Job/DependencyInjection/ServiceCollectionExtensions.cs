@@ -11,6 +11,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IJobExecutionTracker, InProcessJobExecutionTracker>();
         services.AddKeyedTransient<IJob, SyncStravaActivitiesJob>(nameof(SyncStravaActivitiesJob));
         services.AddKeyedTransient<IJob, SyncStravaActivityDetailJob>(nameof(SyncStravaActivityDetailJob));
+        services.AddKeyedTransient<IJob, SyncStravaActivityStreamsJob>(nameof(SyncStravaActivityStreamsJob));
         services.AddKeyedTransient<IJob, SyncStravaActivityImageJob>(nameof(SyncStravaActivityImageJob));
         services.AddKeyedTransient<IJob, StravaActivitiesExportJob>(nameof(StravaActivitiesExportJob));
         services.AddKeyedTransient<IJob, CopyObjectStoreJob>(nameof(CopyObjectStoreJob));

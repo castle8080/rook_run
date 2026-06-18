@@ -500,9 +500,9 @@ public class ObjectStoreStravaActivitiesRepositoryTests
         Assert.NotEqual(eTagFromThreadA, eTagAfterModification);
 
         // If we were to bypass the repository and directly call StoreObjectAsync with the stale ETag,
-        // it should throw ObjectStorePreconditionFailedException.
+        // it should throw PreconditionFailedException.
         // This verifies the ETag is being used in SaveAllAsync.
-        await Assert.ThrowsAsync<RookRun.Common.Exceptions.ObjectStorePreconditionFailedException>(async () =>
+        await Assert.ThrowsAsync<RookRun.Common.Exceptions.PreconditionFailedException>(async () =>
             await store.StoreObjectAsync(
                 "history/strava_activities_2026-03.json.br",
                 new List<StravaActivity> { CreateActivity(3, new DateTimeOffset(2026, 3, 15, 8, 0, 0, TimeSpan.Zero)) },
@@ -581,7 +581,7 @@ public class ObjectStoreStravaActivitiesRepositoryTests
         var activities = objectResult2.Value ?? [];
         activities = activities.Where(a => a.Id != 1).ToList();
 
-        await Assert.ThrowsAsync<RookRun.Common.Exceptions.ObjectStorePreconditionFailedException>(async () =>
+        await Assert.ThrowsAsync<RookRun.Common.Exceptions.PreconditionFailedException>(async () =>
             await store.StoreObjectAsync(
                 "history/strava_activities_2026-03.json.br",
                 activities,

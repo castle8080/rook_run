@@ -1,5 +1,5 @@
 using Microsoft.Extensions.Logging;
-using RookRun.Strava.Client;
+using RookRun.Common.Exceptions;
 
 namespace RookRun.Strava.Sync;
 
@@ -8,8 +8,8 @@ namespace RookRun.Strava.Sync;
 /// </summary>
 public static class StravaRetryPolicy
 {
-    private static readonly TimeSpan InitialDelay = TimeSpan.FromSeconds(10);
-    private static readonly TimeSpan MaxDelay = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan InitialDelay = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan MaxDelay = TimeSpan.FromSeconds(120);
 
     /// <summary>
     /// Executes an operation with exponential backoff when a Strava rate-limit exception is thrown.
@@ -27,7 +27,7 @@ public static class StravaRetryPolicy
         string operationName,
         CancellationToken cancellationToken,
         Func<TimeSpan, CancellationToken, Task>? delayAsync = null,
-        int maxAttempts = 6)
+        int maxAttempts = 12)
     {
         ArgumentNullException.ThrowIfNull(operation);
         ArgumentNullException.ThrowIfNull(logger);
@@ -41,7 +41,7 @@ public static class StravaRetryPolicy
             {
                 return await operation(cancellationToken);
             }
-            catch (StravaRateLimitException ex) when (attempt < maxAttempts)
+            catch (RateLimitException ex) when (attempt < maxAttempts)
             {
                 var delay = GetDelay(attempt);
                 logger.LogWarning(
@@ -54,7 +54,7 @@ public static class StravaRetryPolicy
 
                 await delayAsync(delay, cancellationToken);
             }
-            catch (StravaRateLimitException ex)
+            catch (RateLimitException ex)
             {
                 logger.LogWarning(
                     ex,
@@ -81,7 +81,7 @@ public static class StravaRetryPolicy
         string operationName,
         CancellationToken cancellationToken,
         Func<TimeSpan, CancellationToken, Task>? delayAsync = null,
-        int maxAttempts = 6)
+        int maxAttempts = 12)
     {
         ArgumentNullException.ThrowIfNull(operation);
         ArgumentNullException.ThrowIfNull(logger);

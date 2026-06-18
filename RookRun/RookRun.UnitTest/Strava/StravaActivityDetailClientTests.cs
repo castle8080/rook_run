@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using Moq;
+using RookRun.Common.Exceptions;
 using RookRun.Strava.Client;
 using RookRun.Strava.Client.Auth;
 using RookRun.Strava.Models;
@@ -99,7 +100,7 @@ public sealed class StravaActivityDetailClientTests
 
         var client = CreateClient(handler, "token-xyz");
 
-        var exception = await Assert.ThrowsAsync<StravaRateLimitException>(() => client.GetActivityDetailAsync(123));
+        var exception = await Assert.ThrowsAsync<RateLimitException>(() => client.GetActivityDetailAsync(123));
 
         Assert.Equal(HttpStatusCode.TooManyRequests, exception.StatusCode);
         Assert.Contains("rate limited", exception.ResponseBody, StringComparison.Ordinal);
@@ -219,7 +220,7 @@ public sealed class StravaActivityDetailClientTests
             Options.Create(new StravaClientOptions { ApiBaseUrl = "https://www.strava.com/api/v3" }),
             tokenProvider.Object);
 
-        var exception = await Assert.ThrowsAsync<StravaRateLimitException>(() => client.DownloadImageAsync("https://example.com/photo.jpg"));
+        var exception = await Assert.ThrowsAsync<RateLimitException>(() => client.DownloadImageAsync("https://example.com/photo.jpg"));
 
         Assert.Equal(HttpStatusCode.TooManyRequests, exception.StatusCode);
     }

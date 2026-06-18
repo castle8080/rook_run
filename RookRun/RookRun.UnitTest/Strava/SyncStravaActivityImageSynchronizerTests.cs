@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Moq;
+using RookRun.Common.Exceptions;
 using RookRun.Strava.Client;
 using RookRun.Strava.Models;
 using RookRun.Strava.Repositories;
@@ -230,7 +231,7 @@ public sealed class SyncStravaActivityImageSynchronizerTests
             .ReturnsAsync(Array.Empty<StravaActivityImageKey>());
 
         client.SetupSequence(c => c.DownloadImageAsync(image.ImageUrl, It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new StravaRateLimitException(System.Net.HttpStatusCode.TooManyRequests, "rate limited", new Dictionary<string, string[]>() ))
+            .ThrowsAsync(new RateLimitException(System.Net.HttpStatusCode.TooManyRequests, "rate limited", new Dictionary<string, string[]>() ))
             .ReturnsAsync(new byte[] { 0xFF, 0xD8 });
 
         imageRepository.Setup(r => r.SaveImageAsync(222, "img-1", "jpg", It.IsAny<byte[]>(), It.IsAny<CancellationToken>()))
@@ -251,7 +252,7 @@ public sealed class SyncStravaActivityImageSynchronizerTests
 
         Assert.Equal(1, result);
         Assert.Single(delayCalls);
-        Assert.Equal(TimeSpan.FromSeconds(10), delayCalls[0]);
+        Assert.Equal(TimeSpan.FromSeconds(5), delayCalls[0]);
         imageRepository.Verify(r => r.SaveImageAsync(222, "img-1", "jpg", It.IsAny<byte[]>(), It.IsAny<CancellationToken>()), Times.Once);
     }
 

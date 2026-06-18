@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using RookRun.Common.Exceptions;
 using RookRun.Strava.Client;
 using RookRun.Strava.Models;
 using RookRun.Strava.Repositories;
@@ -119,7 +120,7 @@ public sealed class SyncStravaActivityDetailSynchronizer
                     cancellationToken.IsCancellationRequested);
                 throw;
             }
-            catch (StravaRateLimitException ex)
+            catch (RateLimitException ex)
             {
                 _logger.LogWarning(
                     ex,

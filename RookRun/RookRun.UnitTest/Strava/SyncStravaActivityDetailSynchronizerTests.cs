@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging;
 using Moq;
+using RookRun.Common.Exceptions;
 using RookRun.Strava.Client;
 using RookRun.Strava.Models;
 using RookRun.Strava.Repositories;
@@ -164,7 +165,7 @@ public sealed class SyncStravaActivityDetailSynchronizerTests
         var detail = new StravaActivityDetail { Id = 321, Name = "Retried" };
 
         client.SetupSequence(c => c.GetActivityDetailAsync(321, true, It.IsAny<CancellationToken>()))
-            .ThrowsAsync(new StravaRateLimitException(System.Net.HttpStatusCode.TooManyRequests, "rate limited", new Dictionary<string, string[]>() ))
+            .ThrowsAsync(new RateLimitException(System.Net.HttpStatusCode.TooManyRequests, "rate limited", new Dictionary<string, string[]>() ))
             .ReturnsAsync(detail);
 
         repository.Setup(r => r.ListActivityIdsAsync(It.IsAny<CancellationToken>()))
@@ -186,7 +187,7 @@ public sealed class SyncStravaActivityDetailSynchronizerTests
 
         Assert.Equal(1, result);
         Assert.Single(delayCalls);
-        Assert.Equal(TimeSpan.FromSeconds(10), delayCalls[0]);
+        Assert.Equal(TimeSpan.FromSeconds(5), delayCalls[0]);
         repository.Verify(r => r.SaveAsync(detail, It.IsAny<CancellationToken>()), Times.Once);
     }
 

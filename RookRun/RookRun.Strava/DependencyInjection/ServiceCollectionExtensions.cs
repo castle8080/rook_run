@@ -59,9 +59,12 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<IStravaActivitiesRepository, ObjectStoreStravaActivitiesRepository>();
         services.AddSingleton<StravaActivitiesSynchronizer>();
         services.AddSingleton<IStravaActivityDetailClient, StravaActivityDetailClient>();
+        services.AddSingleton<IStravaActivityStreamsClient, StravaActivityStreamsClient>();
         services.AddSingleton<IStravaActivityDetailRepository, ObjectStoreStravaActivityDetailRepository>();
+        services.AddSingleton<IStravaActivityStreamsRepository, ObjectStoreStravaActivityStreamsRepository>();
         services.AddSingleton<IStravaActivityImageRepository, ObjectStoreStravaActivityImageRepository>();
         services.AddSingleton<SyncStravaActivityDetailSynchronizer>();
+        services.AddSingleton<SyncStravaActivityStreamsSynchronizer>();
         services.AddSingleton<SyncStravaActivityImageSynchronizer>();
         services.AddSingleton<IStravaAuthorizationLauncher, DefaultStravaAuthorizationLauncher>();
         services.AddSingleton<IStravaOAuthListenerHost, StravaOAuthListenerHost>();

@@ -22,6 +22,10 @@ public static class JobCatalog
                 nameof(SyncStravaActivityDetailJob),
                 "Sync Strava Activity Details",
                 "Fetch and cache full activity details (segments, laps, splits) for recent activities."),
+            [nameof(SyncStravaActivityStreamsJob)] = new(
+                nameof(SyncStravaActivityStreamsJob),
+                "Sync Strava Activity Streams",
+                "Fetch and cache activity streams (elevation, heartrate, and related time-series data) for recent activities."),
             [nameof(SyncStravaActivityImageJob)] = new(
                 nameof(SyncStravaActivityImageJob),
                 "Sync Strava Activity Images",

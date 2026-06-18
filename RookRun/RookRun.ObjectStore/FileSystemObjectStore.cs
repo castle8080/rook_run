@@ -71,13 +71,13 @@ public sealed class FileSystemObjectStore : ObjectStoreBase
             // Optimistic concurrency: ETag must match current file state
             if (!File.Exists(fullPath))
             {
-                throw new ObjectStorePreconditionFailedException($"Object at path '{path}' does not exist, but ETag condition was specified.");
+                throw new PreconditionFailedException($"Object at path '{path}' does not exist, but ETag condition was specified.");
             }
 
             var currentETag = GetFileETag(fullPath);
             if (currentETag != ifMatchETag)
             {
-                throw new ObjectStorePreconditionFailedException($"ETag mismatch at path '{path}'. Expected '{ifMatchETag}', but found '{currentETag}'.");
+                throw new PreconditionFailedException($"ETag mismatch at path '{path}'. Expected '{ifMatchETag}', but found '{currentETag}'.");
             }
         }
 

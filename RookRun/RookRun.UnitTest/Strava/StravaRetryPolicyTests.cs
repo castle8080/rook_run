@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using RookRun.Common.Exceptions;
 using RookRun.Strava.Client;
 using RookRun.Strava.Sync;
 using System.Net;
@@ -65,7 +66,7 @@ public sealed class StravaRetryPolicyTests
 
         Assert.Equal(2, attempts);
         Assert.Single(delays);
-        Assert.Equal(TimeSpan.FromSeconds(10), delays[0]);
+        Assert.Equal(TimeSpan.FromSeconds(5), delays[0]);
     }
 
     /// <summary>
@@ -77,7 +78,7 @@ public sealed class StravaRetryPolicyTests
         var attempts = 0;
         var delays = new List<TimeSpan>();
 
-        await Assert.ThrowsAsync<StravaRateLimitException>(() =>
+        await Assert.ThrowsAsync<RateLimitException>(() =>
             StravaRetryPolicy.ExecuteWithRetryAsync(
                 _ =>
                 {
@@ -96,7 +97,7 @@ public sealed class StravaRetryPolicyTests
 
         Assert.Equal(2, attempts);
         Assert.Single(delays);
-        Assert.Equal(TimeSpan.FromSeconds(10), delays[0]);
+        Assert.Equal(TimeSpan.FromSeconds(5), delays[0]);
     }
 
     /// <summary>
@@ -121,9 +122,9 @@ public sealed class StravaRetryPolicyTests
     /// <summary>
     /// Creates a reusable Strava rate-limit exception for retry tests.
     /// </summary>
-    private static StravaRateLimitException CreateRateLimitException()
+    private static RateLimitException CreateRateLimitException()
     {
-        return new StravaRateLimitException(
+        return new RateLimitException(
             HttpStatusCode.TooManyRequests,
             "rate limited",
             new Dictionary<string, string[]>());

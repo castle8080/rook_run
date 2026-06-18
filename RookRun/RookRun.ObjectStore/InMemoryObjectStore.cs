@@ -65,12 +65,12 @@ public sealed class InMemoryObjectStore : ObjectStoreBase
             // Optimistic concurrency: ETag must match
             if (!objects.TryGetValue(normalizedPath, out var existing))
             {
-                throw new ObjectStorePreconditionFailedException($"Object at path '{normalizedPath}' does not exist, but ETag condition was specified.");
+                throw new PreconditionFailedException($"Object at path '{normalizedPath}' does not exist, but ETag condition was specified.");
             }
 
             if (existing.ETag != ifMatchETag)
             {
-                throw new ObjectStorePreconditionFailedException($"ETag mismatch at path '{normalizedPath}'. Expected '{ifMatchETag}', but found '{existing.ETag}'.");
+                throw new PreconditionFailedException($"ETag mismatch at path '{normalizedPath}'. Expected '{ifMatchETag}', but found '{existing.ETag}'.");
             }
 
             // Increment version on successful update

@@ -14,6 +14,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\RookRun.Common\RookRun.Common.csproj" />
     <ProjectReference Include="..\RookRun.ObjectStore\RookRun.ObjectStore.csproj" />
   </ItemGroup>
 

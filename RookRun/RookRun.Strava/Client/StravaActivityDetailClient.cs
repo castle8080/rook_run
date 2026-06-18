@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+using RookRun.Common.Exceptions;
 using RookRun.Strava.Client.Auth;
 using RookRun.Strava.Models;
 using System.Globalization;
@@ -154,7 +155,7 @@ public sealed class StravaActivityDetailClient : IStravaActivityDetailClient
 
             return await response.Content.ReadAsByteArrayAsync(cancellationToken);
         }
-        catch (StravaRateLimitException)
+            catch (RateLimitException)
         {
             throw;
         }
@@ -300,6 +301,6 @@ public sealed class StravaActivityDetailClient : IStravaActivityDetailClient
                 StringComparer.OrdinalIgnoreCase);
 
         var retryAfter = response.Headers.RetryAfter?.Delta;
-        throw new StravaRateLimitException(response.StatusCode, body, headers, retryAfter);
+        throw new RateLimitException(response.StatusCode, body, headers, retryAfter, sourceSystem: "Strava API");
     }
 }

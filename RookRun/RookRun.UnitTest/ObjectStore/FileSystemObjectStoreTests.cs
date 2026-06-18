@@ -104,7 +104,7 @@ public class FileSystemObjectStoreTests : IDisposable
 
         // Try to update with stale ETag should fail
         var updated = new ObjectStoreTestRecord { Name = "first", Count = 2 };
-        var exception = await Assert.ThrowsAsync<ObjectStorePreconditionFailedException>(
+        var exception = await Assert.ThrowsAsync<PreconditionFailedException>(
             () => store.StoreObjectAsync("runs/item", updated, overwrite: true, ifMatchETag: initialETag)
         );
 
@@ -118,7 +118,7 @@ public class FileSystemObjectStoreTests : IDisposable
         var obj = new ObjectStoreTestRecord { Name = "test", Count = 1 };
 
         // Try to update with ETag on non-existent object
-        var exception = await Assert.ThrowsAsync<ObjectStorePreconditionFailedException>(
+        var exception = await Assert.ThrowsAsync<PreconditionFailedException>(
             () => store.StoreObjectAsync("missing/item", obj, overwrite: true, ifMatchETag: "mtime:123")
         );
 

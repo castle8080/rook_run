@@ -79,12 +79,12 @@ public sealed class AzureBlobObjectStore : ObjectStoreBase
                 var currentETag = properties.Value.ETag.ToString();
                 if (currentETag != ifMatchETag)
                 {
-                    throw new ObjectStorePreconditionFailedException($"ETag mismatch at path '{path}'. Expected '{ifMatchETag}', but found '{currentETag}'.");
+                    throw new PreconditionFailedException($"ETag mismatch at path '{path}'. Expected '{ifMatchETag}', but found '{currentETag}'.");
                 }
             }
             catch (RequestFailedException ex) when (ex.Status == 404)
             {
-                throw new ObjectStorePreconditionFailedException($"Object at path '{path}' does not exist, but ETag condition was specified.", ex);
+                throw new PreconditionFailedException($"Object at path '{path}' does not exist, but ETag condition was specified.", ex);
             }
         }
 
