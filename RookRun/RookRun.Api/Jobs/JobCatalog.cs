@@ -18,6 +18,14 @@ public static class JobCatalog
                 nameof(SyncStravaActivitiesJob),
                 "Sync Strava Activities",
                 "Synchronize new Strava activities into the local object store."),
+            [nameof(SyncStravaActivityDetailJob)] = new(
+                nameof(SyncStravaActivityDetailJob),
+                "Sync Strava Activity Details",
+                "Fetch and cache full activity details (segments, laps, splits) for recent activities."),
+            [nameof(SyncStravaActivityImageJob)] = new(
+                nameof(SyncStravaActivityImageJob),
+                "Sync Strava Activity Images",
+                "Download and cache activity images for recent activities."),
             [nameof(StravaActivitiesExportJob)] = new(
                 nameof(StravaActivitiesExportJob),
                 "Export Strava Activities",

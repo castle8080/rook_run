@@ -20,7 +20,7 @@ public class JobsControllerTests
     [Fact]
     public void GetJobs_ReturnsOkWithCatalogValues()
     {
-        var sut = CreateController(new ServiceCollection().BuildServiceProvider());
+        var sut = CreateController(new ServiceCollection().BuildServiceProvider(), new Mock<IJobExecutionTracker>().Object);
 
         var result = sut.GetJobs();
 
@@ -34,11 +34,11 @@ public class JobsControllerTests
     /// Verifies that running a job returns a bad request when no request is supplied.
     /// </summary>
     [Fact]
-    public async Task RunJob_ReturnsBadRequest_WhenRequestIsNull()
+    public void RunJob_ReturnsBadRequest_WhenRequestIsNull()
     {
-        var sut = CreateController(new ServiceCollection().BuildServiceProvider());
+        var sut = CreateController(new ServiceCollection().BuildServiceProvider(), new Mock<IJobExecutionTracker>().Object);
 
-        var result = await sut.RunJob(null!, CancellationToken.None);
+        var result = sut.RunJob(null!, CancellationToken.None);
 
         var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
         var response = Assert.IsType<RunJobResponse>(badRequest.Value);
@@ -51,11 +51,11 @@ public class JobsControllerTests
     /// Verifies that running a job returns a bad request when the job name is blank.
     /// </summary>
     [Fact]
-    public async Task RunJob_ReturnsBadRequest_WhenJobNameIsBlank()
+    public void RunJob_ReturnsBadRequest_WhenJobNameIsBlank()
     {
-        var sut = CreateController(new ServiceCollection().BuildServiceProvider());
+        var sut = CreateController(new ServiceCollection().BuildServiceProvider(), new Mock<IJobExecutionTracker>().Object);
 
-        var result = await sut.RunJob(new RunJobRequest { JobName = "   " }, CancellationToken.None);
+        var result = sut.RunJob(new RunJobRequest { JobName = "   " }, CancellationToken.None);
 
         var badRequest = Assert.IsType<BadRequestObjectResult>(result.Result);
         var response = Assert.IsType<RunJobResponse>(badRequest.Value);
@@ -68,11 +68,11 @@ public class JobsControllerTests
     /// Verifies that running a job returns not found when the requested job is not in the catalog.
     /// </summary>
     [Fact]
-    public async Task RunJob_ReturnsNotFound_WhenJobIsNotRegistered()
+    public void RunJob_ReturnsNotFound_WhenJobIsNotRegistered()
     {
-        var sut = CreateController(new ServiceCollection().BuildServiceProvider());
+        var sut = CreateController(new ServiceCollection().BuildServiceProvider(), new Mock<IJobExecutionTracker>().Object);
 
-        var result = await sut.RunJob(new RunJobRequest { JobName = "UnknownJob" }, CancellationToken.None);
+        var result = sut.RunJob(new RunJobRequest { JobName = "UnknownJob" }, CancellationToken.None);
 
         var notFound = Assert.IsType<NotFoundObjectResult>(result.Result);
         var response = Assert.IsType<RunJobResponse>(notFound.Value);
@@ -83,73 +83,133 @@ public class JobsControllerTests
     }
 
     /// <summary>
-    /// Verifies that running a registered job executes and returns success.
+    /// Verifies that running a registered job queues background execution and returns accepted.
     /// </summary>
     [Fact]
-    public async Task RunJob_ReturnsOk_WhenRegisteredJobExecutesSuccessfully()
+    public async Task RunJob_ReturnsAccepted_WhenRegisteredJobIsQueued()
     {
         var jobName = nameof(SyncStravaActivitiesJob);
-        var cancellationToken = new CancellationTokenSource().Token;
         var job = new Mock<IJob>();
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
         job
-            .Setup(x => x.ExecuteAsync(cancellationToken))
+            .Setup(x => x.ExecuteAsync(CancellationToken.None))
             .Returns(Task.CompletedTask);
+
+        var tracker = new Mock<IJobExecutionTracker>();
+        tracker
+            .Setup(x => x.TryStart(jobName))
+            .Returns(true);
+        tracker
+            .Setup(x => x.Complete(jobName))
+            .Callback(() => completion.TrySetResult(true));
 
         var services = new ServiceCollection();
         services.AddKeyedTransient<IJob>(jobName, (_, _) => job.Object);
 
-        var sut = CreateController(services.BuildServiceProvider());
+        var sut = CreateController(services.BuildServiceProvider(), tracker.Object);
 
-        var result = await sut.RunJob(new RunJobRequest { JobName = jobName }, cancellationToken);
+        var result = sut.RunJob(new RunJobRequest { JobName = jobName }, CancellationToken.None);
 
-        var ok = Assert.IsType<OkObjectResult>(result.Result);
-        var response = Assert.IsType<RunJobResponse>(ok.Value);
+        var accepted = Assert.IsType<ObjectResult>(result.Result);
+        var response = Assert.IsType<RunJobResponse>(accepted.Value);
 
         Assert.True(response.Succeeded);
         Assert.Equal(jobName, response.JobName);
-        Assert.Equal("Job completed successfully.", response.Message);
+        Assert.Equal("Job started.", response.Message);
+        Assert.Equal(202, accepted.StatusCode);
 
-        job.Verify(x => x.ExecuteAsync(cancellationToken), Times.Once);
+        await completion.Task.WaitAsync(TimeSpan.FromSeconds(2));
+
+        tracker.Verify(x => x.TryStart(jobName), Times.Once);
+        job.Verify(x => x.ExecuteAsync(CancellationToken.None), Times.Once);
+        tracker.Verify(x => x.Complete(jobName), Times.Once);
     }
 
     /// <summary>
-    /// Verifies that running a registered job returns server error when execution throws.
+    /// Verifies that running a registered job returns conflict when the same job is already running.
     /// </summary>
     [Fact]
-    public async Task RunJob_ReturnsServerError_WhenJobExecutionThrows()
+    public void RunJob_ReturnsConflict_WhenJobIsAlreadyRunning()
     {
         var jobName = nameof(SyncStravaActivitiesJob);
         var job = new Mock<IJob>();
+        var tracker = new Mock<IJobExecutionTracker>();
+
+        tracker
+            .Setup(x => x.TryStart(jobName))
+            .Returns(false);
+
+        var services = new ServiceCollection();
+        services.AddKeyedTransient<IJob>(jobName, (_, _) => job.Object);
+
+        var sut = CreateController(services.BuildServiceProvider(), tracker.Object);
+
+        var result = sut.RunJob(new RunJobRequest { JobName = jobName }, CancellationToken.None);
+
+        var conflict = Assert.IsType<ConflictObjectResult>(result.Result);
+        var response = Assert.IsType<RunJobResponse>(conflict.Value);
+
+        Assert.Equal(409, conflict.StatusCode);
+        Assert.False(response.Succeeded);
+        Assert.Equal(jobName, response.JobName);
+        Assert.Equal($"Job '{jobName}' is already running.", response.Message);
+
+        job.Verify(x => x.ExecuteAsync(It.IsAny<CancellationToken>()), Times.Never);
+        tracker.Verify(x => x.Complete(jobName), Times.Never);
+    }
+
+    /// <summary>
+    /// Verifies that running a registered job still returns accepted when background execution fails.
+    /// </summary>
+    [Fact]
+    public async Task RunJob_ReturnsAccepted_WhenBackgroundExecutionThrows()
+    {
+        var jobName = nameof(SyncStravaActivitiesJob);
+        var job = new Mock<IJob>();
+        var completion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var tracker = new Mock<IJobExecutionTracker>();
+
+        tracker
+            .Setup(x => x.TryStart(jobName))
+            .Returns(true);
+        tracker
+            .Setup(x => x.Complete(jobName))
+            .Callback(() => completion.TrySetResult(true));
 
         job
-            .Setup(x => x.ExecuteAsync(It.IsAny<CancellationToken>()))
+            .Setup(x => x.ExecuteAsync(CancellationToken.None))
             .ThrowsAsync(new InvalidOperationException("failure"));
 
         var services = new ServiceCollection();
         services.AddKeyedTransient<IJob>(jobName, (_, _) => job.Object);
 
-        var sut = CreateController(services.BuildServiceProvider());
+        var sut = CreateController(services.BuildServiceProvider(), tracker.Object);
 
-        var result = await sut.RunJob(new RunJobRequest { JobName = jobName }, CancellationToken.None);
+        var result = sut.RunJob(new RunJobRequest { JobName = jobName }, CancellationToken.None);
 
-        var objectResult = Assert.IsType<ObjectResult>(result.Result);
-        var response = Assert.IsType<RunJobResponse>(objectResult.Value);
+        var accepted = Assert.IsType<ObjectResult>(result.Result);
+        var response = Assert.IsType<RunJobResponse>(accepted.Value);
 
-        Assert.Equal(500, objectResult.StatusCode);
-        Assert.False(response.Succeeded);
+        Assert.True(response.Succeeded);
         Assert.Equal(jobName, response.JobName);
-        Assert.Equal("Job failed. Review API logs for details.", response.Message);
+        Assert.Equal("Job started.", response.Message);
+        Assert.Equal(202, accepted.StatusCode);
+
+        await completion.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        tracker.Verify(x => x.Complete(jobName), Times.Once);
     }
 
     /// <summary>
     /// Creates a controller under test with a supplied service provider.
     /// </summary>
     /// <param name="serviceProvider">The service provider used by the controller.</param>
+    /// <param name="tracker">The tracker used to guard duplicate in-process runs.</param>
     /// <returns>A configured controller instance.</returns>
-    private static JobsController CreateController(IServiceProvider serviceProvider)
+    private static JobsController CreateController(IServiceProvider serviceProvider, IJobExecutionTracker tracker)
     {
         var logger = new Mock<ILogger<JobsController>>();
-        return new JobsController(serviceProvider, logger.Object);
+        var scopeFactory = serviceProvider.GetRequiredService<IServiceScopeFactory>();
+        return new JobsController(scopeFactory, tracker, logger.Object);
     }
 }

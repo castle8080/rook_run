@@ -16,6 +16,18 @@ public interface IStravaActivitiesRepository
     Task<ListStravaActivitiesResult> ListAsync(ListStravaActivitiesQuery query, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Lists activity IDs whose dates fall within the inclusive range.
+    /// </summary>
+    /// <param name="startInclusive">The inclusive lower bound of the search range.</param>
+    /// <param name="endInclusive">The inclusive upper bound of the search range.</param>
+    /// <param name="cancellationToken">A token used to cancel the operation.</param>
+    /// <returns>Distinct activity IDs matching the date range.</returns>
+    Task<IReadOnlyList<long>> ListActivityIdsAsync(
+        DateTimeOffset startInclusive,
+        DateTimeOffset endInclusive,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Saves the supplied activities to the backing store.
     /// </summary>
     /// <param name="activities">The activities to save.</param>

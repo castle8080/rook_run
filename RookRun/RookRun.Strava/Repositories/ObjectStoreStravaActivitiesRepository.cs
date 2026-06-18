@@ -79,6 +79,24 @@ public sealed class ObjectStoreStravaActivitiesRepository : IStravaActivitiesRep
         };
     }
 
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<long>> ListActivityIdsAsync(
+        DateTimeOffset startInclusive,
+        DateTimeOffset endInclusive,
+        CancellationToken cancellationToken = default)
+    {
+        if (startInclusive > endInclusive)
+        {
+            throw new ArgumentOutOfRangeException(nameof(startInclusive), "The start of the range must be less than or equal to the end of the range.");
+        }
+
+        var activities = await SearchAsync(startInclusive, endInclusive, cancellationToken);
+        return activities
+            .Select(static activity => activity.Id)
+            .Distinct()
+            .ToArray();
+    }
+
     /// <summary>
     /// Saves all activities into monthly partition files derived from <see cref="StravaActivity.StartDate"/>.
     /// Existing partition files are loaded first, activities are upserted by id, and the result is written

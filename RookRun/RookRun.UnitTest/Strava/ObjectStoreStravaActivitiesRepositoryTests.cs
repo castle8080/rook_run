@@ -168,6 +168,28 @@ public class ObjectStoreStravaActivitiesRepositoryTests
     }
 
     [Fact]
+    public async Task ListActivityIdsAsync_ReturnsDistinctIdsInRange()
+    {
+        var store = new InMemoryObjectStore();
+        var repository = new ObjectStoreStravaActivitiesRepository(store, "history");
+
+        await repository.SaveAllAsync([
+            CreateActivity(1, new DateTimeOffset(2026, 3, 1, 9, 0, 0, TimeSpan.FromHours(-7))),
+            CreateActivity(2, new DateTimeOffset(2026, 3, 15, 10, 0, 0, TimeSpan.FromHours(-7))),
+            CreateActivity(3, new DateTimeOffset(2026, 4, 2, 13, 0, 0, TimeSpan.FromHours(-7)))
+        ]);
+
+        var ids = await repository.ListActivityIdsAsync(
+            new DateTimeOffset(2026, 3, 10, 0, 0, 0, TimeSpan.FromHours(-7)),
+            new DateTimeOffset(2026, 4, 5, 0, 0, 0, TimeSpan.FromHours(-7)));
+
+        Assert.Equal(2, ids.Count);
+        Assert.Contains(2, ids);
+        Assert.Contains(3, ids);
+        Assert.DoesNotContain(1, ids);
+    }
+
+    [Fact]
     public async Task DeleteAllAsync_RemovesIdsByPartitionAndIgnoresMissingActivities()
     {
         var store = new InMemoryObjectStore();

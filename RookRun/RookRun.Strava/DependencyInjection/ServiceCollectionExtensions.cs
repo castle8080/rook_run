@@ -50,11 +50,19 @@ public static class ServiceCollectionExtensions
             httpClient.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
         });
 
+        // Plain client for CDN image downloads (no auth, no base address)
+        services.AddHttpClient("StravaImages");
+
         services.AddSingleton<IStravaTokenStore, ObjectStoreStravaTokenStore>();
         services.AddSingleton<IStravaAccessTokenProvider, RookRun.Strava.Client.Auth.StravaAccessTokenProvider>();
         services.AddSingleton<IStravaActivitiesClient, StravaActivitiesClient>();
         services.AddSingleton<IStravaActivitiesRepository, ObjectStoreStravaActivitiesRepository>();
         services.AddSingleton<StravaActivitiesSynchronizer>();
+        services.AddSingleton<IStravaActivityDetailClient, StravaActivityDetailClient>();
+        services.AddSingleton<IStravaActivityDetailRepository, ObjectStoreStravaActivityDetailRepository>();
+        services.AddSingleton<IStravaActivityImageRepository, ObjectStoreStravaActivityImageRepository>();
+        services.AddSingleton<SyncStravaActivityDetailSynchronizer>();
+        services.AddSingleton<SyncStravaActivityImageSynchronizer>();
         services.AddSingleton<IStravaAuthorizationLauncher, DefaultStravaAuthorizationLauncher>();
         services.AddSingleton<IStravaOAuthListenerHost, StravaOAuthListenerHost>();
         services.AddSingleton<IStravaOAuthClient, StravaOAuthClient>();
