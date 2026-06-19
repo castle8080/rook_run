@@ -34,6 +34,10 @@ public static class JobCatalog
                 nameof(SyncStravaActivityImageJob),
                 "Sync Strava Activity Images",
                 "Download and cache activity images for recent activities."),
+            [JobNames.SyncStravaDataJob] = new(
+                JobNames.SyncStravaDataJob,
+                "Sync Strava Data",
+                "Run the full Strava synchronization pipeline in sequence: activities, details, streams, image index, and images."),
             [nameof(StravaActivitiesExportJob)] = new(
                 nameof(StravaActivitiesExportJob),
                 "Export Strava Activities",

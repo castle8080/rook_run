@@ -1,4 +1,6 @@
 using System.Net;
+using System.Net.Http.Json;
+using System.Text.Json;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
 using RookRun.Contracts.Jobs;
@@ -13,6 +15,8 @@ namespace RookRun.Web.UnitTest.Pages;
 /// </summary>
 public sealed class JobsPageTests : TestContext
 {
+    private const string SyncStravaDataJob = "SyncStravaDataJob";
+
     /// <summary>
     /// Verifies the page loads job options and displays the selected job description.
     /// </summary>
@@ -69,6 +73,60 @@ public sealed class JobsPageTests : TestContext
             Assert.Contains("Job completed.", cut.Markup, StringComparison.Ordinal);
             Assert.True(handler.RequestCount >= 2);
         });
+    }
+
+    /// <summary>
+    /// Verifies running the selected SyncStravaDataJob sends the composite job name to the API.
+    /// </summary>
+    [Fact]
+    public void RunSelectedJobAsync_PostsSelectedCompositeJobName()
+    {
+        var observedJobName = string.Empty;
+        var handler = new StubHttpMessageHandler();
+        handler.AddJsonResponse(HttpMethod.Get, "api/jobs", new List<JobInfoDto>
+        {
+            new("sync-strava-activities", "Sync Strava Activities", "Single-step sync."),
+            new(SyncStravaDataJob, "Sync Strava Data", "Composite sync pipeline.")
+        });
+        handler.AddResponse(
+            request =>
+            {
+                if (request.Method != HttpMethod.Post ||
+                    request.RequestUri?.PathAndQuery.Equals("/api/jobs/run", StringComparison.OrdinalIgnoreCase) != true)
+                {
+                    return false;
+                }
+
+                var content = request.Content?.ReadAsStringAsync().GetAwaiter().GetResult() ?? string.Empty;
+                using var document = JsonDocument.Parse(content);
+                if (!document.RootElement.TryGetProperty("jobName", out var jobNameProperty))
+                {
+                    return false;
+                }
+
+                observedJobName = jobNameProperty.GetString() ?? string.Empty;
+                return true;
+            },
+            () => new HttpResponseMessage(HttpStatusCode.Accepted)
+            {
+                Content = JsonContent.Create(new RunJobResponse
+                {
+                    JobName = SyncStravaDataJob,
+                    Succeeded = true,
+                    Message = "Job started.",
+                    CompletedAtUtc = new DateTimeOffset(2026, 6, 18, 0, 0, 0, TimeSpan.Zero)
+                })
+            });
+
+        RegisterJobsClient(handler);
+
+        var cut = RenderComponent<Jobs>();
+
+        cut.WaitForAssertion(() => Assert.Contains("Sync Strava Data", cut.Markup, StringComparison.Ordinal));
+        cut.Find("select#jobSelect").Change(SyncStravaDataJob);
+        cut.Find("button.btn.btn-primary").Click();
+
+        cut.WaitForAssertion(() => Assert.Equal(SyncStravaDataJob, observedJobName));
     }
 
     /// <summary>

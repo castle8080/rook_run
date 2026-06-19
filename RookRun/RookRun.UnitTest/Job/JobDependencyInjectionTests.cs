@@ -38,6 +38,30 @@ public sealed class JobDependencyInjectionTests
     }
 
     /// <summary>
+    /// Verifies the SyncStravaDataJob composite keyed registration is resolvable.
+    /// </summary>
+    [Fact]
+    public void AddJobs_RegistersSyncStravaDataCompositeJob()
+    {
+        var services = new ServiceCollection();
+
+        services.AddLogging();
+        services.AddJobs(new ConfigurationBuilder().Build());
+
+        services.AddKeyedTransient<IJob>(nameof(SyncStravaActivitiesJob), (_, _) => Mock.Of<IJob>());
+        services.AddKeyedTransient<IJob>(nameof(SyncStravaActivityDetailJob), (_, _) => Mock.Of<IJob>());
+        services.AddKeyedTransient<IJob>(nameof(SyncStravaActivityStreamsJob), (_, _) => Mock.Of<IJob>());
+        services.AddKeyedTransient<IJob>(nameof(SyncStravaActivityIdImageIdIndexJob), (_, _) => Mock.Of<IJob>());
+        services.AddKeyedTransient<IJob>(nameof(SyncStravaActivityImageJob), (_, _) => Mock.Of<IJob>());
+
+        using var provider = services.BuildServiceProvider();
+
+        var compositeJob = provider.GetRequiredKeyedService<IJob>(JobNames.SyncStravaDataJob);
+
+        Assert.IsType<SequentialCompositeJob>(compositeJob);
+    }
+
+    /// <summary>
     /// Verifies keyed registrations use transient lifetime.
     /// </summary>
     [Fact]
@@ -51,6 +75,31 @@ public sealed class JobDependencyInjectionTests
 
         var first = provider.GetRequiredKeyedService<IJob>(nameof(CopyObjectStoreJob));
         var second = provider.GetRequiredKeyedService<IJob>(nameof(CopyObjectStoreJob));
+
+        Assert.NotSame(first, second);
+    }
+
+    /// <summary>
+    /// Verifies the SyncStravaDataJob keyed registration uses transient lifetime.
+    /// </summary>
+    [Fact]
+    public void AddJobs_RegistersTransientSyncStravaDataCompositeJob()
+    {
+        var services = new ServiceCollection();
+
+        services.AddLogging();
+        services.AddJobs(new ConfigurationBuilder().Build());
+
+        services.AddKeyedTransient<IJob>(nameof(SyncStravaActivitiesJob), (_, _) => Mock.Of<IJob>());
+        services.AddKeyedTransient<IJob>(nameof(SyncStravaActivityDetailJob), (_, _) => Mock.Of<IJob>());
+        services.AddKeyedTransient<IJob>(nameof(SyncStravaActivityStreamsJob), (_, _) => Mock.Of<IJob>());
+        services.AddKeyedTransient<IJob>(nameof(SyncStravaActivityIdImageIdIndexJob), (_, _) => Mock.Of<IJob>());
+        services.AddKeyedTransient<IJob>(nameof(SyncStravaActivityImageJob), (_, _) => Mock.Of<IJob>());
+
+        using var provider = services.BuildServiceProvider();
+
+        var first = provider.GetRequiredKeyedService<IJob>(JobNames.SyncStravaDataJob);
+        var second = provider.GetRequiredKeyedService<IJob>(JobNames.SyncStravaDataJob);
 
         Assert.NotSame(first, second);
     }

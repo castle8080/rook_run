@@ -28,6 +28,7 @@ public class JobsControllerTests
         var jobs = Assert.IsAssignableFrom<IEnumerable<JobInfoDto>>(okResult.Value);
 
         Assert.Equal(JobCatalog.Jobs.Count, jobs.Count());
+        Assert.Contains(jobs, job => job.Name == JobNames.SyncStravaDataJob);
     }
 
     /// <summary>
