@@ -129,4 +129,22 @@ public sealed class StravaActivitiesApiClient
             ? "api/strava/activities"
             : $"api/strava/activities?{string.Join("&", queryParts)}";
     }
+
+    /// <summary>
+    /// Fetches aggregated run statistics for a 13-month rolling window from the API.
+    /// </summary>
+    /// <param name="cancellationToken">A token used to cancel the HTTP request.</param>
+    /// <returns>The run statistics response containing YTD totals and per-month stats.</returns>
+    public async Task<RunStatsResponse> GetRunStatsAsync(CancellationToken cancellationToken = default)
+    {
+        var response = await this.httpClient.GetFromJsonAsync<RunStatsResponse>(
+            "api/strava/run-stats", cancellationToken);
+
+        if (response is null)
+        {
+            throw new InvalidOperationException("API returned an empty run stats response payload.");
+        }
+
+        return response;
+    }
 }
