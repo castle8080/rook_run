@@ -1,0 +1,19 @@
+@using RookRun.Contracts.Strava
+@namespace RookRun.Web.Pages
+
+<div class="ytd-card card mb-4">
+    <div class="card-body ytd-body">
+        <span class="ytd-title">@Summary.Year Year to Date</span>
+        <span class="ytd-stat"><strong>@Summary.TotalRuns</strong> runs</span>
+        <span class="ytd-sep" aria-hidden="true">·</span>
+        <span class="ytd-stat"><strong>@RunStatsFormatting.FormatDist(Summary.TotalDistanceMiles)</strong></span>
+    </div>
+</div>
+
+@code {
+    /// <summary>
+    /// Gets or sets the year-to-date run summary displayed by this card.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required RunYtdSummaryDto Summary { get; set; }
+}

@@ -1,0 +1,27 @@
+.ytd-card {
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    border-radius: 14px;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.07);
+    background: rgba(255, 255, 255, 0.88);
+}
+
+.ytd-body {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+}
+
+.ytd-title {
+    font-weight: 700;
+    font-size: 1rem;
+    margin-right: 0.5rem;
+}
+
+.ytd-stat {
+    font-size: 0.95rem;
+}
+
+.ytd-sep {
+    color: var(--text-muted);
+}

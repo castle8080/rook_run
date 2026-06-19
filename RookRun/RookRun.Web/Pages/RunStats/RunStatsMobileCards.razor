@@ -1,0 +1,73 @@
+@using RookRun.Contracts.Strava
+@namespace RookRun.Web.Pages
+
+<div class="stats-card-grid d-md-none">
+    @foreach (var month in Months)
+    {
+        <div class="stats-month-card card">
+            <div class="card-header stats-month-header">
+                <strong>@RunStatsFormatting.FormatMonthLong(month.Year, month.Month)</strong>
+            </div>
+            <div class="card-body stats-month-body">
+                <div class="stats-row">
+                    <span class="stats-label">Runs</span>
+                    <span class="stats-value">@month.TotalRuns</span>
+                </div>
+                <div class="stats-row">
+                    <span class="stats-label">Time</span>
+                    <span class="stats-value">@RunStatsFormatting.FormatTime(month.TotalMovingTimeSeconds)</span>
+                </div>
+                <div class="stats-row">
+                    <span class="stats-label">Distance</span>
+                    <span class="stats-value">@RunStatsFormatting.FormatDist(month.TotalDistanceMiles)</span>
+                </div>
+                <div class="stats-row">
+                    <span class="stats-label">Elevation</span>
+                    <span class="stats-value">@RunStatsFormatting.FormatElev(month.TotalElevationFeet)</span>
+                </div>
+                <div class="stats-row">
+                    <span class="stats-label">Longest</span>
+                    <span class="stats-value">
+                        @if (month.LongestRunDistanceMiles.HasValue)
+                        {
+                            @RunStatsFormatting.FormatDist(month.LongestRunDistanceMiles.Value)
+                            if (month.LongestRunPaceSecondsPerMile.HasValue)
+                            {
+                                <span class="stat-pace"> @@ @RunStatsFormatting.FormatPace(month.LongestRunPaceSecondsPerMile.Value)</span>
+                            }
+                        }
+                        else
+                        {
+                            <span class="text-muted">-</span>
+                        }
+                    </span>
+                </div>
+                <div class="stats-row">
+                    <span class="stats-label">Fastest</span>
+                    <span class="stats-value">
+                        @if (month.FastestRunPaceSecondsPerMile.HasValue)
+                        {
+                            @RunStatsFormatting.FormatPace(month.FastestRunPaceSecondsPerMile.Value)
+                            if (month.FastestRunDistanceMiles.HasValue)
+                            {
+                                <span class="stat-dist"> (@RunStatsFormatting.FormatDist(month.FastestRunDistanceMiles.Value))</span>
+                            }
+                        }
+                        else
+                        {
+                            <span class="text-muted">-</span>
+                        }
+                    </span>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+@code {
+    /// <summary>
+    /// Gets or sets the ordered month stats displayed in mobile cards.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required IReadOnlyList<RunMonthStatsDto> Months { get; set; }
+}
