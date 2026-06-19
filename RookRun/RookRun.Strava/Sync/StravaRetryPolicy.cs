@@ -26,6 +26,7 @@ public static class StravaRetryPolicy
         ILogger logger,
         string operationName,
         CancellationToken cancellationToken,
+        Func<CancellationToken, Task>? beforeDelayAsync = null,
         Func<TimeSpan, CancellationToken, Task>? delayAsync = null,
         int maxAttempts = 12)
     {
@@ -51,6 +52,11 @@ public static class StravaRetryPolicy
                     attempt,
                     maxAttempts,
                     delay);
+
+                if (beforeDelayAsync is not null)
+                {
+                    await beforeDelayAsync(cancellationToken);
+                }
 
                 await delayAsync(delay, cancellationToken);
             }
@@ -80,6 +86,7 @@ public static class StravaRetryPolicy
         ILogger logger,
         string operationName,
         CancellationToken cancellationToken,
+        Func<CancellationToken, Task>? beforeDelayAsync = null,
         Func<TimeSpan, CancellationToken, Task>? delayAsync = null,
         int maxAttempts = 12)
     {
@@ -96,6 +103,7 @@ public static class StravaRetryPolicy
             logger,
             operationName,
             cancellationToken,
+            beforeDelayAsync,
             delayAsync,
             maxAttempts);
     }

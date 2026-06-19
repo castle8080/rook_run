@@ -78,11 +78,11 @@ public sealed class SyncStravaActivityStreamsSynchronizer
             try
             {
                 var streams = await StravaRetryPolicy.ExecuteWithRetryAsync(
-                    ct => _client.GetActivityStreamsAsync(activityId, StravaStreamKeys.DefaultPhase1, ct),
-                    _logger,
-                    $"activity streams fetch for {activityId}",
-                    cancellationToken,
-                    _delayAsync);
+                    operation: ct => _client.GetActivityStreamsAsync(activityId, StravaStreamKeys.DefaultPhase1, ct),
+                    logger: _logger,
+                    operationName: $"activity streams fetch for {activityId}",
+                    cancellationToken: cancellationToken,
+                    delayAsync: _delayAsync);
 
                 if (streams is null)
                 {

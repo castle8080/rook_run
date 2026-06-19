@@ -2,7 +2,6 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Moq;
 using RookRun.Job;
 using RookRun.Strava.Client;
-using RookRun.Strava.Models;
 using RookRun.Strava.Repositories;
 using RookRun.Strava.Sync;
 
@@ -20,7 +19,7 @@ public sealed class SyncStravaActivityImageJobTests
     public void Constructor_ThrowsWhenDependenciesAreNull()
     {
         var activitiesRepository = new Mock<IStravaActivitiesRepository>();
-        var synchronizer = CreateSynchronizer();
+        var (synchronizer, _) = CreateSynchronizer();
 
         Assert.Throws<ArgumentNullException>(() =>
             new SyncStravaActivityImageJob(null!, activitiesRepository.Object, synchronizer));
@@ -41,36 +40,9 @@ public sealed class SyncStravaActivityImageJobTests
             .Setup(r => r.ListActivityIdsAsync(It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync([10L, 20L, 30L]);
 
-        var detailRepository = new Mock<IStravaActivityDetailRepository>();
-        detailRepository.Setup(r => r.GetByIdAsync(10, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new StravaActivityDetail { Id = 10, Name = "Activity 10" });
-        detailRepository.Setup(r => r.GetByIdAsync(20, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new StravaActivityDetail { Id = 20, Name = "Activity 20" });
-        detailRepository.Setup(r => r.GetByIdAsync(30, It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new StravaActivityDetail { Id = 30, Name = "Activity 30" });
-
-        var client = new Mock<IStravaActivityDetailClient>();
-        client.Setup(c => c.ExtractActivityImages(It.Is<StravaActivityDetail>(d => d.Id == 10)))
-            .Returns([new StravaActivityImage { ActivityId = 10, ImageId = "img-10", ImageUrl = "https://example.com/10.jpg", Extension = "jpg" }]);
-        client.Setup(c => c.ExtractActivityImages(It.Is<StravaActivityDetail>(d => d.Id == 20)))
-            .Returns([new StravaActivityImage { ActivityId = 20, ImageId = "img-20", ImageUrl = "https://example.com/20.jpg", Extension = "jpg" }]);
-        client.Setup(c => c.ExtractActivityImages(It.Is<StravaActivityDetail>(d => d.Id == 30)))
-            .Returns([new StravaActivityImage { ActivityId = 30, ImageId = "img-30", ImageUrl = "https://example.com/30.jpg", Extension = "jpg" }]);
-
-        client.Setup(c => c.DownloadImageAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(new byte[] { 0x01 });
-
-        var imageRepository = new Mock<IStravaActivityImageRepository>();
-        imageRepository.Setup(r => r.ListImageKeysAsync(It.IsAny<CancellationToken>()))
-            .ReturnsAsync([new StravaActivityImageKey(30, "img-30")]);
-        imageRepository.Setup(r => r.SaveImageAsync(It.IsAny<long>(), It.IsAny<string>(), It.IsAny<string>(), It.IsAny<byte[]>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
-
-        var synchronizer = new SyncStravaActivityImageSynchronizer(
-            NullLogger<SyncStravaActivityImageSynchronizer>.Instance,
-            client.Object,
-            detailRepository.Object,
-            imageRepository.Object);
+        var (synchronizer, synchronizerMock) = CreateSynchronizer();
+        synchronizerMock.Setup(s => s.SyncAsync(It.IsAny<IReadOnlyList<long>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(2);
 
         var job = new SyncStravaActivityImageJob(
             NullLogger<SyncStravaActivityImageJob>.Instance,
@@ -84,9 +56,9 @@ public sealed class SyncStravaActivityImageJobTests
             It.IsAny<DateTimeOffset>(),
             It.IsAny<CancellationToken>()), Times.Once);
 
-        client.Verify(c => c.DownloadImageAsync("https://example.com/10.jpg", It.IsAny<CancellationToken>()), Times.Once);
-        client.Verify(c => c.DownloadImageAsync("https://example.com/20.jpg", It.IsAny<CancellationToken>()), Times.Once);
-        client.Verify(c => c.DownloadImageAsync("https://example.com/30.jpg", It.IsAny<CancellationToken>()), Times.Never);
+        synchronizerMock.Verify(s => s.SyncAsync(
+            It.Is<IReadOnlyList<long>>(ids => ids.SequenceEqual(new[] { 10L, 20L, 30L })),
+            It.IsAny<CancellationToken>()), Times.Once);
     }
 
     /// <summary>
@@ -100,15 +72,7 @@ public sealed class SyncStravaActivityImageJobTests
             .Setup(r => r.ListActivityIdsAsync(It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(Array.Empty<long>());
 
-        var detailRepository = new Mock<IStravaActivityDetailRepository>();
-        var client = new Mock<IStravaActivityDetailClient>();
-        var imageRepository = new Mock<IStravaActivityImageRepository>();
-
-        var synchronizer = new SyncStravaActivityImageSynchronizer(
-            NullLogger<SyncStravaActivityImageSynchronizer>.Instance,
-            client.Object,
-            detailRepository.Object,
-            imageRepository.Object);
+        var (synchronizer, synchronizerMock) = CreateSynchronizer();
 
         var job = new SyncStravaActivityImageJob(
             NullLogger<SyncStravaActivityImageJob>.Instance,
@@ -117,10 +81,8 @@ public sealed class SyncStravaActivityImageJobTests
 
         await job.ExecuteAsync(CancellationToken.None);
 
-        detailRepository.Verify(r => r.GetByIdAsync(
-            It.IsAny<long>(), It.IsAny<CancellationToken>()), Times.Never);
-        client.Verify(c => c.DownloadImageAsync(
-            It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        synchronizerMock.Verify(s => s.SyncAsync(
+            It.IsAny<IReadOnlyList<long>>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     /// <summary>
@@ -137,7 +99,7 @@ public sealed class SyncStravaActivityImageJobTests
             .Setup(r => r.ListActivityIdsAsync(It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new OperationCanceledException());
 
-        var synchronizer = CreateSynchronizer();
+        var (synchronizer, _) = CreateSynchronizer();
 
         var job = new SyncStravaActivityImageJob(
             NullLogger<SyncStravaActivityImageJob>.Instance,
@@ -158,7 +120,7 @@ public sealed class SyncStravaActivityImageJobTests
             .Setup(r => r.ListActivityIdsAsync(It.IsAny<DateTimeOffset>(), It.IsAny<DateTimeOffset>(), It.IsAny<CancellationToken>()))
             .ThrowsAsync(new InvalidOperationException("storage failure"));
 
-        var synchronizer = CreateSynchronizer();
+        var (synchronizer, _) = CreateSynchronizer();
 
         var job = new SyncStravaActivityImageJob(
             NullLogger<SyncStravaActivityImageJob>.Instance,
@@ -168,12 +130,18 @@ public sealed class SyncStravaActivityImageJobTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => job.ExecuteAsync(CancellationToken.None));
     }
 
-    private static SyncStravaActivityImageSynchronizer CreateSynchronizer()
+    private static (SyncStravaActivityImageSynchronizer, Mock<SyncStravaActivityImageSynchronizer>) CreateSynchronizer()
     {
-        return new SyncStravaActivityImageSynchronizer(
+        var synchronizerMock = new Mock<SyncStravaActivityImageSynchronizer>(
             NullLogger<SyncStravaActivityImageSynchronizer>.Instance,
             new Mock<IStravaActivityDetailClient>().Object,
-            new Mock<IStravaActivityDetailRepository>().Object,
-            new Mock<IStravaActivityImageRepository>().Object);
+            new Mock<IStravaActivityImageRepository>().Object,
+            new Mock<IStravaActivityImageIdIndexRepository>().Object,
+            null!)
+        {
+            CallBase = true
+        };
+
+        return (synchronizerMock.Object, synchronizerMock);
     }
 }

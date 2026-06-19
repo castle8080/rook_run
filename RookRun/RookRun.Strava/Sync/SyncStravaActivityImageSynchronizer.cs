@@ -1,3 +1,4 @@
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 using RookRun.Common.Exceptions;
 using RookRun.Strava.Client;
@@ -8,14 +9,15 @@ namespace RookRun.Strava.Sync;
 
 /// <summary>
 /// Synchronizes activity images from Strava API.
-/// Extracts image metadata from activity details, downloads image files, and stores them.
+/// Uses the cached activity-image-id index to determine which images still need to be downloaded,
+/// then resolves download metadata only for activities with missing image files.
 /// Uses concurrent downloads (3 concurrent) to efficiently fetch from CDN while respecting rate limits.
 /// </summary>
-public sealed class SyncStravaActivityImageSynchronizer
+public class SyncStravaActivityImageSynchronizer
 {
     private readonly IStravaActivityDetailClient _client;
-    private readonly IStravaActivityDetailRepository _detailRepository;
     private readonly IStravaActivityImageRepository _imageRepository;
+    private readonly IStravaActivityImageIdIndexRepository _indexRepository;
     private readonly ILogger<SyncStravaActivityImageSynchronizer> _logger;
     private readonly Func<TimeSpan, CancellationToken, Task> _delayAsync;
 
@@ -29,32 +31,32 @@ public sealed class SyncStravaActivityImageSynchronizer
     /// Initializes a new instance of the <see cref="SyncStravaActivityImageSynchronizer"/> class.
     /// </summary>
     /// <param name="logger">Logger for image sync events.</param>
-    /// <param name="client">Client for downloading images from Strava CDN.</param>
-    /// <param name="detailRepository">Repository for reading cached activity details.</param>
+    /// <param name="client">Client for resolving image metadata and downloading images from Strava CDN.</param>
     /// <param name="imageRepository">Repository for storing downloaded images.</param>
+    /// <param name="indexRepository">Repository for reading the cached activity-image-id index.</param>
     /// <param name="delayAsync">Optional delay function for rate-limit retries.</param>
     public SyncStravaActivityImageSynchronizer(
         ILogger<SyncStravaActivityImageSynchronizer> logger,
         IStravaActivityDetailClient client,
-        IStravaActivityDetailRepository detailRepository,
         IStravaActivityImageRepository imageRepository,
+        IStravaActivityImageIdIndexRepository indexRepository,
         Func<TimeSpan, CancellationToken, Task>? delayAsync = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _client = client ?? throw new ArgumentNullException(nameof(client));
-        _detailRepository = detailRepository ?? throw new ArgumentNullException(nameof(detailRepository));
         _imageRepository = imageRepository ?? throw new ArgumentNullException(nameof(imageRepository));
+        _indexRepository = indexRepository ?? throw new ArgumentNullException(nameof(indexRepository));
         _delayAsync = delayAsync ?? Task.Delay;
     }
 
     /// <summary>
-    /// Synchronizes images for all activities with cached details.
-    /// Extracts image URLs from cached activity details and downloads/stores images.
+    /// Synchronizes images for all activities with cached index entries.
+    /// Extracts download metadata only for activities that still have missing cached images.
     /// </summary>
     /// <param name="activityIds">The activity IDs to sync images for.</param>
     /// <param name="cancellationToken">Token to cancel the operation.</param>
     /// <returns>Number of images successfully downloaded and stored.</returns>
-    public async Task<int> SyncAsync(IReadOnlyList<long> activityIds, CancellationToken cancellationToken = default)
+    public virtual async Task<int> SyncAsync(IReadOnlyList<long> activityIds, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(activityIds);
 
@@ -66,66 +68,51 @@ public sealed class SyncStravaActivityImageSynchronizer
         _logger.LogInformation("Starting sync of images for {Count} activities", activityIds.Count);
 
         var sourceActivityIds = activityIds.ToHashSet();
+        var (index, _) = await _indexRepository.LoadAsync(cancellationToken);
+        var desiredImagesByActivity = BuildDesiredImagesByActivity(sourceActivityIds, index);
+
+        if (desiredImagesByActivity.Count == 0)
+        {
+            _logger.LogInformation("No indexed activity image IDs were found for the requested activities");
+            return 0;
+        }
+
         var cachedImageKeys = (await _imageRepository.ListImageKeysAsync(cancellationToken))
             .Where(key => sourceActivityIds.Contains(key.ActivityId))
             .ToHashSet();
-        var cachedImageCountsByActivity = cachedImageKeys
-            .GroupBy(key => key.ActivityId)
-            .ToDictionary(group => group.Key, group => group.Count());
 
         var imagesToDownload = new List<StravaActivityImage>();
         var expectedImageKeyCount = 0;
 
-        foreach (var activityId in activityIds)
+        foreach (var (activityId, desiredImageIds) in desiredImagesByActivity)
         {
             try
             {
-                var detail = await _detailRepository.GetByIdAsync(activityId, cancellationToken);
-                if (detail == null)
+                var missingImageIds = desiredImageIds
+                    .Where(imageId => !cachedImageKeys.Contains(new StravaActivityImageKey(activityId, imageId)))
+                    .ToList();
+
+                if (missingImageIds.Count == 0)
                 {
-                    _logger.LogDebug("Activity detail {ActivityId} not cached, skipping image extraction", activityId);
+                    _logger.LogDebug("Activity {ActivityId} already has all indexed images cached", activityId);
                     continue;
                 }
 
-                var expectedPhotoCount = GetExpectedPhotoCount(detail);
-                var cachedImageCount = cachedImageCountsByActivity.GetValueOrDefault(activityId, 0);
+                var imageMetadataById = await LoadImageMetadataByIdAsync(activityId, cancellationToken);
+                expectedImageKeyCount += desiredImageIds.Count;
 
-                if (expectedPhotoCount > 0 && cachedImageCount >= expectedPhotoCount)
+                foreach (var imageId in missingImageIds)
                 {
-                    _logger.LogDebug(
-                        "Activity {ActivityId} already has {CachedCount}/{ExpectedCount} images cached, skipping photo lookup",
-                        activityId,
-                        cachedImageCount,
-                        expectedPhotoCount);
-                    continue;
-                }
-
-                IReadOnlyList<StravaActivityImage> images;
-                if (expectedPhotoCount > 0)
-                {
-                    images = await TryGetActivityPhotosAsync(activityId, detail, cancellationToken);
-                }
-                else
-                {
-                    images = _client.ExtractActivityImages(detail);
-                }
-
-                if (images.Count == 0)
-                {
-                    _logger.LogDebug("Activity {ActivityId} has no images", activityId);
-                    continue;
-                }
-
-                images = DistinctByImageId(images);
-                expectedImageKeyCount += expectedPhotoCount > 0 ? expectedPhotoCount : images.Count;
-
-                foreach (var image in images)
-                {
-                    var imageKey = new StravaActivityImageKey(image.ActivityId, image.ImageId);
-                    if (!cachedImageKeys.Contains(imageKey))
+                    if (!imageMetadataById.TryGetValue(imageId, out var image))
                     {
-                        imagesToDownload.Add(image);
+                        _logger.LogWarning(
+                            "Indexed image ID {ImageId} for activity {ActivityId} could not be resolved from the photos endpoint",
+                            imageId,
+                            activityId);
+                        continue;
                     }
+
+                    imagesToDownload.Add(image);
                 }
             }
             catch (OperationCanceledException)
@@ -178,6 +165,72 @@ public sealed class SyncStravaActivityImageSynchronizer
     }
 
     /// <summary>
+    /// Builds the desired image IDs keyed by activity ID from the cached index.
+    /// </summary>
+    private static IReadOnlyDictionary<long, IReadOnlyList<string>> BuildDesiredImagesByActivity(
+        ISet<long> sourceActivityIds,
+        StravaActivityImageIdIndex index)
+    {
+        var desired = new Dictionary<long, IReadOnlyList<string>>();
+
+        foreach (var activityId in sourceActivityIds)
+        {
+            var activityKey = activityId.ToString(CultureInfo.InvariantCulture);
+            if (!index.Items.TryGetValue(activityKey, out var imageIds) || imageIds.Count == 0)
+            {
+                continue;
+            }
+
+            desired[activityId] = imageIds
+                .Where(imageId => !string.IsNullOrWhiteSpace(imageId))
+                .Distinct(StringComparer.Ordinal)
+                .OrderBy(imageId => imageId, StringComparer.Ordinal)
+                .ToList();
+        }
+
+        return desired;
+    }
+
+    /// <summary>
+    /// Loads downloadable image metadata for an activity.
+    /// </summary>
+    private async Task<IReadOnlyDictionary<string, StravaActivityImage>> LoadImageMetadataByIdAsync(
+        long activityId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var photos = await StravaRetryPolicy.ExecuteWithRetryAsync(
+                operation: ct => _client.GetActivityPhotosAsync(activityId, ct),
+                logger: _logger,
+                operationName: $"activity photos lookup for {activityId}",
+                cancellationToken: cancellationToken,
+                delayAsync: _delayAsync);
+
+            return photos
+                .Where(image => !string.IsNullOrWhiteSpace(image.ImageId))
+                .GroupBy(image => image.ImageId, StringComparer.Ordinal)
+                .ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        }
+        catch (RateLimitException)
+        {
+            throw;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Unable to load photos for activity {ActivityId}; indexed image IDs for that activity will be skipped.",
+                activityId);
+            return new Dictionary<string, StravaActivityImage>(StringComparer.Ordinal);
+        }
+    }
+
+    /// <summary>
     /// Downloads a single image and saves it to the repository.
     /// </summary>
     private async Task<bool> DownloadAndSaveImageAsync(
@@ -189,11 +242,11 @@ public sealed class SyncStravaActivityImageSynchronizer
         try
         {
             var imageBytes = await StravaRetryPolicy.ExecuteWithRetryAsync(
-                ct => _client.DownloadImageAsync(image.ImageUrl, ct),
-                _logger,
-                $"image download for {image.ImageId} on activity {image.ActivityId}",
-                cancellationToken,
-                _delayAsync);
+                operation: ct => _client.DownloadImageAsync(image.ImageUrl, ct),
+                logger: _logger,
+                operationName: $"image download for {image.ImageId} on activity {image.ActivityId}",
+                cancellationToken: cancellationToken,
+                delayAsync: _delayAsync);
 
             if (imageBytes == null || imageBytes.Length == 0)
             {
@@ -240,64 +293,4 @@ public sealed class SyncStravaActivityImageSynchronizer
         }
     }
 
-    /// <summary>
-    /// Loads activity photos via API and falls back to detail extraction if the photos endpoint fails.
-    /// </summary>
-    private async Task<IReadOnlyList<StravaActivityImage>> TryGetActivityPhotosAsync(
-        long activityId,
-        StravaActivityDetail detail,
-        CancellationToken cancellationToken)
-    {
-        try
-        {
-            var activityPhotos = await _client.GetActivityPhotosAsync(activityId, cancellationToken);
-            if (activityPhotos.Count > 0)
-            {
-                return activityPhotos;
-            }
-
-            return _client.ExtractActivityImages(detail);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(
-                ex,
-                "Failed to load full photo list for activity {ActivityId}; falling back to detail photo extraction.",
-                activityId);
-            return _client.ExtractActivityImages(detail);
-        }
-    }
-
-    /// <summary>
-    /// Removes duplicate images by Strava image ID.
-    /// </summary>
-    private static IReadOnlyList<StravaActivityImage> DistinctByImageId(
-        IReadOnlyList<StravaActivityImage> images)
-    {
-        var byId = new Dictionary<string, StravaActivityImage>(StringComparer.Ordinal);
-
-        foreach (var image in images)
-        {
-            byId[image.ImageId] = image;
-        }
-
-        return byId.Values.ToList();
-    }
-
-    /// <summary>
-    /// Determines the expected number of photos for an activity from detail metadata.
-    /// </summary>
-    private static int GetExpectedPhotoCount(StravaActivityDetail detail)
-    {
-        if (detail.TotalPhotoCount > 0)
-        {
-            return detail.TotalPhotoCount;
-        }
-
-        return detail.PhotoCount;
-    }
 }

@@ -20,11 +20,11 @@ public sealed class StravaRetryPolicyTests
         var delayCalls = 0;
 
         var result = await StravaRetryPolicy.ExecuteWithRetryAsync(
-            _ => Task.FromResult(42),
-            NullLogger.Instance,
-            "immediate success",
-            CancellationToken.None,
-            (delay, token) =>
+            operation: _ => Task.FromResult(42),
+            logger: NullLogger.Instance,
+            operationName: "immediate success",
+            cancellationToken: CancellationToken.None,
+            delayAsync: (delay, token) =>
             {
                 delayCalls++;
                 return Task.CompletedTask;
@@ -44,7 +44,7 @@ public sealed class StravaRetryPolicyTests
         var delays = new List<TimeSpan>();
 
         await StravaRetryPolicy.ExecuteWithRetryAsync(
-            _ =>
+            operation: _ =>
             {
                 attempts++;
                 if (attempts == 1)
@@ -54,10 +54,10 @@ public sealed class StravaRetryPolicyTests
 
                 return Task.CompletedTask;
             },
-            NullLogger.Instance,
-            "non-generic retry",
-            CancellationToken.None,
-            (delay, token) =>
+            logger: NullLogger.Instance,
+            operationName: "non-generic retry",
+            cancellationToken: CancellationToken.None,
+            delayAsync: (delay, token) =>
             {
                 delays.Add(delay);
                 return Task.CompletedTask;
@@ -80,15 +80,15 @@ public sealed class StravaRetryPolicyTests
 
         await Assert.ThrowsAsync<RateLimitException>(() =>
             StravaRetryPolicy.ExecuteWithRetryAsync(
-                _ =>
+                operation: _ =>
                 {
                     attempts++;
                     throw CreateRateLimitException();
                 },
-                NullLogger.Instance,
-                "exhaust retries",
-                CancellationToken.None,
-                (delay, token) =>
+                logger: NullLogger.Instance,
+                operationName: "exhaust retries",
+                cancellationToken: CancellationToken.None,
+                delayAsync: (delay, token) =>
                 {
                     delays.Add(delay);
                     return Task.CompletedTask;
@@ -111,11 +111,11 @@ public sealed class StravaRetryPolicyTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             StravaRetryPolicy.ExecuteWithRetryAsync(
-                _ => throw CreateRateLimitException(),
-                NullLogger.Instance,
-                "cancel during delay",
-                cts.Token,
-                (delay, token) => Task.FromCanceled(token),
+                operation: _ => throw CreateRateLimitException(),
+                logger: NullLogger.Instance,
+                operationName: "cancel during delay",
+                cancellationToken: cts.Token,
+                delayAsync: (delay, token) => Task.FromCanceled(token),
                 maxAttempts: 3));
     }
 

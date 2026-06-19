@@ -90,14 +90,14 @@ public sealed class SyncStravaActivityDetailSynchronizer
                 // Fetch detail with include_all_efforts=true to get complete segment data
                 fetched = true;
                 var detail = await StravaRetryPolicy.ExecuteWithRetryAsync(
-                    ct => _client.GetActivityDetailAsync(
+                    operation: ct => _client.GetActivityDetailAsync(
                         activityId,
                         includeAllEfforts: true,
                         cancellationToken: ct),
-                    _logger,
-                    $"activity detail fetch for {activityId}",
-                    cancellationToken,
-                    _delayAsync);
+                    logger: _logger,
+                    operationName: $"activity detail fetch for {activityId}",
+                    cancellationToken: cancellationToken,
+                    delayAsync: _delayAsync);
 
                 if (detail == null)
                 {
