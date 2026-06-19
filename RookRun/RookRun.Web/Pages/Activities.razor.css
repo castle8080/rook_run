@@ -13,42 +13,7 @@
     color: var(--text-muted);
 }
 
-.activities-controls {
-    border: 1px solid rgba(15, 23, 42, 0.1);
-    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
-    border-radius: 14px;
-    margin-bottom: 1rem;
-}
-
-.controls-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
-    gap: 1rem;
-    align-items: end;
-}
-
-.controls-actions {
-    display: flex;
-    gap: 0.65rem;
-    flex-wrap: wrap;
-}
-
 .activities-summary {
     color: var(--text-muted);
     margin: 0.5rem 0;
-}
-
-.activities-table-wrap {
-    border: 1px solid rgba(15, 23, 42, 0.1);
-    border-radius: 14px;
-    overflow: hidden;
-    background: rgba(255, 255, 255, 0.88);
-}
-
-.activities-table {
-    margin-bottom: 0;
-}
-
-.activities-table thead th {
-    white-space: nowrap;
 }

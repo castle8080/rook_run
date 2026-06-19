@@ -10,40 +10,18 @@
         <p>Load all activities for a UTC date range and review key workout metrics.</p>
     </header>
 
-    <div class="activities-controls card">
-        <div class="card-body controls-grid">
-            <div>
-                <label class="form-label" for="startDate">Start Date (UTC)</label>
-                <InputDate id="startDate" class="form-control" @bind-Value="startDateUtc" />
-            </div>
-            <div>
-                <label class="form-label" for="endDate">End Date (UTC)</label>
-                <InputDate id="endDate" class="form-control" @bind-Value="endDateUtc" />
-            </div>
-            <div>
-                <label class="form-label" for="typeFilter">Type Filter</label>
-                <select id="typeFilter" class="form-select" @bind="SelectedTypeFilter" disabled="@(availableTypeFilters.Count == 0)">
-                    <option value="">All Types</option>
-                    @foreach (var type in availableTypeFilters)
-                    {
-                        <option value="@type">@type</option>
-                    }
-                </select>
-            </div>
-            <div class="controls-actions">
-                <button class="btn btn-primary" @onclick="LoadActivitiesAsync" disabled="@isLoading">
-                    @(isLoading ? "Loading..." : "Load Activities")
-                </button>
-                <a class="btn btn-outline-secondary @(activities.Count == 0 ? "disabled" : string.Empty)"
-                   href="#"
-                   aria-disabled="@(activities.Count == 0)"
-                   @onclick="DownloadCsvAsync"
-                   @onclick:preventDefault="true">
-                    Download CSV
-                </a>
-            </div>
-        </div>
-    </div>
+    <ActivitiesControls
+        StartDateUtc="@startDateUtc"
+        StartDateUtcChanged="OnStartDateUtcChanged"
+        EndDateUtc="@endDateUtc"
+        EndDateUtcChanged="OnEndDateUtcChanged"
+        SelectedTypeFilter="@SelectedTypeFilter"
+        SelectedTypeFilterChanged="OnSelectedTypeFilterChanged"
+        AvailableTypeFilters="@availableTypeFilters"
+        IsLoading="@isLoading"
+        IsDownloadDisabled="@(filteredActivities.Count == 0)"
+        OnLoadActivities="LoadActivitiesAsync"
+        OnDownloadCsv="DownloadCsvAsync" />
 
     @if (!string.IsNullOrWhiteSpace(validationError))
     {
@@ -57,56 +35,10 @@
 
     <p class="activities-summary">Showing @filteredActivities.Count of @activities.Count loaded activities.</p>
 
-    <div class="table-responsive activities-table-wrap">
-        <table class="table table-striped table-hover align-middle activities-table">
-            <thead>
-                <tr>
-                    <th scope="col">Start (UTC)</th>
-                    <th scope="col">Start (Local)</th>
-                    <th scope="col">Name</th>
-                    <th scope="col">Type</th>
-                    <th scope="col">Elapsed</th>
-                    <th scope="col">Distance (mi)</th>
-                    <th scope="col">Pace (min/mi)</th>
-                    <th scope="col">Elevation (ft)</th>
-                    <th scope="col">Avg HR</th>
-                    <th scope="col">Max HR</th>
-                </tr>
-            </thead>
-            <tbody>
-                @if (filteredActivities.Count == 0)
-                {
-                    <tr>
-                        <td colspan="10" class="text-center text-muted py-4">No activities match the current filters for this UTC date range.</td>
-                    </tr>
-                }
-                else
-                {
-                    foreach (var activity in filteredActivities)
-                    {
-                        <tr>
-                            <td>@FormatUtcDate(activity.StartDate)</td>
-                            <td>@FormatLocalDate(activity.StartDateLocal)</td>
-                            <td>@(string.IsNullOrWhiteSpace(activity.Name) ? "(untitled)" : activity.Name)</td>
-                            <td>@ResolveActivityType(activity)</td>
-                            <td>@FormatElapsedTime(activity.ElapsedTime)</td>
-                            <td>@FormatMiles(activity.Distance)</td>
-                            <td>@FormatPaceMinutesPerMile(activity.MovingTime, activity.Distance)</td>
-                            <td>@FormatElevationFeet(activity.TotalElevationGain)</td>
-                            <td>@FormatHeartRate(activity.AverageHeartrate)</td>
-                            <td>@FormatHeartRate(activity.MaxHeartrate)</td>
-                        </tr>
-                    }
-                }
-            </tbody>
-        </table>
-    </div>
+    <ActivitiesTable Activities="@filteredActivities" />
 </section>
 
 @code {
-    private const double MetersPerMile = 1609.344;
-    private const double FeetPerMeter = 3.28084;
-
     private readonly List<StravaActivityDto> activities = [];
     private readonly List<StravaActivityDto> filteredActivities = [];
     private readonly List<string> availableTypeFilters = [];
@@ -116,6 +48,36 @@
     private bool isLoading;
     private string? validationError;
     private string? loadError;
+
+    /// <summary>
+    /// Handles updates to the selected UTC start date.
+    /// </summary>
+    /// <param name="value">The selected start date.</param>
+    private Task OnStartDateUtcChanged(DateTime value)
+    {
+        startDateUtc = value;
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Handles updates to the selected UTC end date.
+    /// </summary>
+    /// <param name="value">The selected end date.</param>
+    private Task OnEndDateUtcChanged(DateTime value)
+    {
+        endDateUtc = value;
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Handles updates to the selected activity type filter.
+    /// </summary>
+    /// <param name="value">The selected activity type.</param>
+    private Task OnSelectedTypeFilterChanged(string value)
+    {
+        SelectedTypeFilter = value;
+        return Task.CompletedTask;
+    }
 
     /// <summary>
     /// Loads all activities for the selected UTC date range.
@@ -165,7 +127,7 @@
             return;
         }
 
-        var csv = BuildCsv(filteredActivities);
+        var csv = ActivitiesCsvExporter.BuildCsv(filteredActivities);
         var fileName = $"strava_activities_{startDateUtc:yyyyMMdd}_{endDateUtc:yyyyMMdd}.csv";
         await JSRuntime.InvokeVoidAsync("rookRunDownloads.downloadTextFile", fileName, csv, "text/csv;charset=utf-8");
     }
@@ -178,7 +140,7 @@
         availableTypeFilters.Clear();
         availableTypeFilters.AddRange(
             activities
-                .Select(ResolveActivityType)
+                .Select(ActivitiesFormatting.ResolveActivityType)
                 .Where(type => type != "-")
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(type => type, StringComparer.OrdinalIgnoreCase));
@@ -200,7 +162,7 @@
         IEnumerable<StravaActivityDto> query = activities;
         if (!string.IsNullOrWhiteSpace(selectedTypeFilter))
         {
-            query = query.Where(activity => string.Equals(ResolveActivityType(activity), selectedTypeFilter, StringComparison.OrdinalIgnoreCase));
+            query = query.Where(activity => string.Equals(ActivitiesFormatting.ResolveActivityType(activity), selectedTypeFilter, StringComparison.OrdinalIgnoreCase));
         }
 
         filteredActivities.AddRange(query);
@@ -218,168 +180,4 @@
             ApplyTypeFilter();
         }
     }
-
-    /// <summary>
-    /// Builds CSV content from the supplied activity collection.
-    /// </summary>
-    /// <param name="items">The activities to serialize to CSV.</param>
-    /// <returns>The CSV text payload.</returns>
-    private static string BuildCsv(IReadOnlyList<StravaActivityDto> items)
-    {
-        var lines = new List<string>(items.Count + 1)
-        {
-            "StartDateUtc,StartDateLocal,Name,Type,ElapsedTime,DistanceMiles,PaceMinPerMile,ElevationFeet,AverageHeartrate,MaxHeartrate"
-        };
-
-        foreach (var item in items)
-        {
-            var row = string.Join(",",
-                EscapeCsv(FormatUtcDate(item.StartDate)),
-                EscapeCsv(FormatLocalDate(item.StartDateLocal)),
-                EscapeCsv(item.Name ?? string.Empty),
-                EscapeCsv(ResolveActivityType(item)),
-                EscapeCsv(FormatElapsedTime(item.ElapsedTime)),
-                EscapeCsv(FormatMiles(item.Distance)),
-                EscapeCsv(FormatPaceMinutesPerMile(item.MovingTime, item.Distance)),
-                EscapeCsv(FormatElevationFeet(item.TotalElevationGain)),
-                EscapeCsv(FormatHeartRate(item.AverageHeartrate)),
-                EscapeCsv(FormatHeartRate(item.MaxHeartrate)));
-
-            lines.Add(row);
-        }
-
-        return string.Join(Environment.NewLine, lines);
-    }
-
-    /// <summary>
-    /// Escapes a value for safe inclusion in a CSV field.
-    /// </summary>
-    /// <param name="value">The value to escape.</param>
-    /// <returns>The escaped CSV field.</returns>
-    private static string EscapeCsv(string value)
-    {
-        if (value.Contains('"') || value.Contains(',') || value.Contains('\n') || value.Contains('\r'))
-        {
-            return $"\"{value.Replace("\"", "\"\"")}\"";
-        }
-
-        return value;
-    }
-
-    /// <summary>
-    /// Formats a UTC date/time string for display.
-    /// </summary>
-    /// <param name="value">The value to format.</param>
-    /// <returns>A formatted UTC timestamp, or a placeholder.</returns>
-    private static string FormatUtcDate(DateTimeOffset? value) => value is null
-        ? "-"
-        : value.Value.UtcDateTime.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture);
-
-    /// <summary>
-    /// Formats a local date/time string for display.
-    /// </summary>
-    /// <param name="value">The local date/time value to format.</param>
-    /// <returns>A formatted local timestamp, or a placeholder.</returns>
-    private static string FormatLocalDate(DateTimeOffset? value) => value is null
-        ? "-"
-        : value.Value.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture);
-
-    /// <summary>
-    /// Formats elapsed time in hh:mm:ss.
-    /// </summary>
-    /// <param name="elapsedTimeSeconds">Elapsed time in seconds.</param>
-    /// <returns>The formatted elapsed time, or a placeholder.</returns>
-    private static string FormatElapsedTime(int elapsedTimeSeconds)
-    {
-        if (elapsedTimeSeconds <= 0)
-        {
-            return "-";
-        }
-
-        var elapsed = TimeSpan.FromSeconds(elapsedTimeSeconds);
-        return elapsed.TotalHours >= 1
-            ? $"{(int)elapsed.TotalHours:00}:{elapsed.Minutes:00}:{elapsed.Seconds:00}"
-            : $"00:{elapsed.Minutes:00}:{elapsed.Seconds:00}";
-    }
-
-    /// <summary>
-    /// Formats distance in miles from meters.
-    /// </summary>
-    /// <param name="distanceMeters">Distance in meters.</param>
-    /// <returns>The formatted miles value.</returns>
-    private static string FormatMiles(double distanceMeters)
-    {
-        if (distanceMeters <= 0)
-        {
-            return "-";
-        }
-
-        var miles = distanceMeters / MetersPerMile;
-        return miles.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
-    }
-
-    /// <summary>
-    /// Formats pace as minutes per mile using mm:ss format.
-    /// </summary>
-    /// <param name="movingTimeSeconds">Moving time in seconds.</param>
-    /// <param name="distanceMeters">Distance in meters.</param>
-    /// <returns>The formatted pace string, or a placeholder.</returns>
-    private static string FormatPaceMinutesPerMile(int movingTimeSeconds, double distanceMeters)
-    {
-        if (movingTimeSeconds <= 0 || distanceMeters <= 0)
-        {
-            return "-";
-        }
-
-        var miles = distanceMeters / MetersPerMile;
-        if (miles <= 0)
-        {
-            return "-";
-        }
-
-        var secondsPerMile = movingTimeSeconds / miles;
-        var pace = TimeSpan.FromSeconds(secondsPerMile);
-        var totalMinutes = (int)pace.TotalMinutes;
-        return $"{totalMinutes:00}:{pace.Seconds:00}";
-    }
-
-    /// <summary>
-    /// Formats elevation gain in feet from meters.
-    /// </summary>
-    /// <param name="elevationMeters">Elevation gain in meters.</param>
-    /// <returns>The formatted elevation value.</returns>
-    private static string FormatElevationFeet(double elevationMeters)
-    {
-        var feet = elevationMeters * FeetPerMeter;
-        return feet.ToString("F0", System.Globalization.CultureInfo.InvariantCulture);
-    }
-
-    /// <summary>
-    /// Formats heart-rate values for display.
-    /// </summary>
-    /// <param name="heartRate">Heart rate value in beats per minute.</param>
-    /// <returns>The formatted heart-rate string.</returns>
-    private static string FormatHeartRate(double? heartRate) => heartRate is null
-        ? "-"
-        : heartRate.Value.ToString("F0", System.Globalization.CultureInfo.InvariantCulture);
-
-    /// <summary>
-    /// Resolves an activity type string using Type first, then SportType.
-    /// </summary>
-    /// <param name="activity">The activity to inspect.</param>
-    /// <returns>A display-friendly activity type.</returns>
-    private static string ResolveActivityType(StravaActivityDto activity)
-    {
-        if (!string.IsNullOrWhiteSpace(activity.Type))
-        {
-            return activity.Type;
-        }
-
-        if (!string.IsNullOrWhiteSpace(activity.SportType))
-        {
-            return activity.SportType;
-        }
-
-        return "-";
-    }
- }
+}

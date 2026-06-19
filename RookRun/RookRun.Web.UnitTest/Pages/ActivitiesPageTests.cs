@@ -183,7 +183,7 @@ public sealed class ActivitiesPageTests : TestContext
         cut.Find("button.btn.btn-primary").Click();
         cut.WaitForAssertion(() => Assert.Contains("Showing 1 of 1 loaded activities.", cut.Markup, StringComparison.Ordinal));
 
-        cut.Find("a.btn.btn-outline-secondary").Click();
+        cut.Find("button.btn.btn-outline-secondary").Click();
 
         cut.WaitForAssertion(() =>
         {

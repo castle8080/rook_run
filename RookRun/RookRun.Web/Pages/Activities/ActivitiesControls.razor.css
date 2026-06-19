@@ -1,0 +1,19 @@
+.activities-controls {
+    border: 1px solid rgba(15, 23, 42, 0.1);
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08);
+    border-radius: 14px;
+    margin-bottom: 1rem;
+}
+
+.controls-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+    gap: 1rem;
+    align-items: end;
+}
+
+.controls-actions {
+    display: flex;
+    gap: 0.65rem;
+    flex-wrap: wrap;
+}

@@ -1,0 +1,145 @@
+@namespace RookRun.Web.Pages
+
+<div class="activities-controls card">
+    <div class="card-body controls-grid">
+        <div>
+            <label class="form-label" for="startDate">Start Date (UTC)</label>
+            <InputDate id="startDate" class="form-control" @bind-Value="BoundStartDateUtc" />
+        </div>
+        <div>
+            <label class="form-label" for="endDate">End Date (UTC)</label>
+            <InputDate id="endDate" class="form-control" @bind-Value="BoundEndDateUtc" />
+        </div>
+        <div>
+            <label class="form-label" for="typeFilter">Type Filter</label>
+            <select id="typeFilter" class="form-select" @bind="BoundSelectedTypeFilter" disabled="@(AvailableTypeFilters.Count == 0)">
+                <option value="">All Types</option>
+                @foreach (var type in AvailableTypeFilters)
+                {
+                    <option value="@type">@type</option>
+                }
+            </select>
+        </div>
+        <div class="controls-actions">
+            <button class="btn btn-primary" @onclick="OnLoadActivities" disabled="@IsLoading">
+                @(IsLoading ? "Loading..." : "Load Activities")
+            </button>
+            <button class="btn btn-outline-secondary" @onclick="OnDownloadCsv" disabled="@IsDownloadDisabled">
+                Download CSV
+            </button>
+        </div>
+    </div>
+</div>
+
+@code {
+    /// <summary>
+    /// Gets or sets the selected UTC start date.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required DateTime StartDateUtc { get; set; }
+
+    /// <summary>
+    /// Gets or sets the callback fired when the UTC start date changes.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required EventCallback<DateTime> StartDateUtcChanged { get; set; }
+
+    /// <summary>
+    /// Gets or sets the selected UTC end date.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required DateTime EndDateUtc { get; set; }
+
+    /// <summary>
+    /// Gets or sets the callback fired when the UTC end date changes.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required EventCallback<DateTime> EndDateUtcChanged { get; set; }
+
+    /// <summary>
+    /// Gets or sets the selected activity type filter.
+    /// </summary>
+    [Parameter]
+    public string SelectedTypeFilter { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the callback fired when the activity type filter changes.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required EventCallback<string> SelectedTypeFilterChanged { get; set; }
+
+    /// <summary>
+    /// Gets or sets the available activity type filter values.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required IReadOnlyList<string> AvailableTypeFilters { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether activities are currently loading.
+    /// </summary>
+    [Parameter]
+    public bool IsLoading { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether CSV download should be disabled.
+    /// </summary>
+    [Parameter]
+    public bool IsDownloadDisabled { get; set; }
+
+    /// <summary>
+    /// Gets or sets the callback that triggers activity loading.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required EventCallback OnLoadActivities { get; set; }
+
+    /// <summary>
+    /// Gets or sets the callback that triggers CSV download.
+    /// </summary>
+    [Parameter, EditorRequired]
+    public required EventCallback OnDownloadCsv { get; set; }
+
+    /// <summary>
+    /// Gets or sets the start date used by two-way input binding.
+    /// </summary>
+    private DateTime BoundStartDateUtc
+    {
+        get => StartDateUtc;
+        set
+        {
+            if (value != StartDateUtc)
+            {
+                _ = StartDateUtcChanged.InvokeAsync(value);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the end date used by two-way input binding.
+    /// </summary>
+    private DateTime BoundEndDateUtc
+    {
+        get => EndDateUtc;
+        set
+        {
+            if (value != EndDateUtc)
+            {
+                _ = EndDateUtcChanged.InvokeAsync(value);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the selected type filter used by two-way select binding.
+    /// </summary>
+    private string BoundSelectedTypeFilter
+    {
+        get => SelectedTypeFilter;
+        set
+        {
+            if (!string.Equals(value, SelectedTypeFilter, StringComparison.Ordinal))
+            {
+                _ = SelectedTypeFilterChanged.InvokeAsync(value);
+            }
+        }
+    }
+}
