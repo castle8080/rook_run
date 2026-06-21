@@ -35,6 +35,8 @@ public sealed class RequestResponseLoggingMiddleware
         var actionDescriptor = endpoint?.Metadata.GetMetadata<ControllerActionDescriptor>();
         var controllerName = actionDescriptor?.ControllerName ?? endpoint?.DisplayName ?? "unknown";
         var actionName = actionDescriptor?.ActionName ?? endpoint?.DisplayName ?? "unknown";
+        var userIdentity = context.User?.Identity?.Name;
+        var isAuthenticated = context.User?.Identity?.IsAuthenticated == true;
         var requestSizeBytes = context.Request.ContentLength;
         var originalResponseBody = context.Response.Body;
         await using var responseBody = new CountingWriteStream(originalResponseBody);
@@ -43,12 +45,14 @@ public sealed class RequestResponseLoggingMiddleware
         var stopwatch = Stopwatch.StartNew();
 
         this.logger.LogInformation(
-            "Executing {Method} {Path} for {Controller}.{Action}. RequestSizeBytes={RequestSizeBytes}",
+            "Executing {Method} {Path} for {Controller}.{Action}. RequestSizeBytes={RequestSizeBytes} IsAuthenticated={IsAuthenticated} UserIdentity={UserIdentity}",
             context.Request.Method,
             context.Request.Path.Value,
             controllerName,
             actionName,
-            requestSizeBytes.HasValue ? requestSizeBytes.Value : null);
+            requestSizeBytes.HasValue ? requestSizeBytes.Value : null,
+            isAuthenticated,
+            userIdentity);
 
         try
         {
@@ -60,14 +64,16 @@ public sealed class RequestResponseLoggingMiddleware
             context.Response.Body = originalResponseBody;
 
             this.logger.LogInformation(
-                "Completed {Method} {Path} for {Controller}.{Action} in {ElapsedMilliseconds} ms with {StatusCode} and ResponseSizeBytes={ResponseSizeBytes}",
+                "Completed {Method} {Path} for {Controller}.{Action} in {ElapsedMilliseconds} ms with {StatusCode} and ResponseSizeBytes={ResponseSizeBytes} IsAuthenticated={IsAuthenticated} UserIdentity={UserIdentity}",
                 context.Request.Method,
                 context.Request.Path.Value,
                 controllerName,
                 actionName,
                 stopwatch.ElapsedMilliseconds,
                 context.Response.StatusCode,
-                responseBody.BytesWritten);
+                responseBody.BytesWritten,
+                isAuthenticated,
+                userIdentity);
         }
     }
 

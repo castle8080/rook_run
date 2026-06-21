@@ -3,46 +3,48 @@
 
 <PageTitle>Jobs</PageTitle>
 
-<section class="jobs-shell">
-    <header class="jobs-header">
-        <h1>Jobs</h1>
-        <p>Select a job and run it through the API host.</p>
-    </header>
+<ProtectedPageContent>
+    <section class="jobs-shell">
+        <header class="jobs-header">
+            <h1>Jobs</h1>
+            <p>Select a job and run it through the API host.</p>
+        </header>
 
-    @if (!string.IsNullOrWhiteSpace(loadError))
-    {
-        <div class="alert alert-danger">@loadError</div>
-    }
+        @if (!string.IsNullOrWhiteSpace(loadError))
+        {
+            <div class="alert alert-danger">@loadError</div>
+        }
 
-    <div class="jobs-form card">
-        <div class="card-body">
-            <label class="form-label" for="jobSelect">Available Job</label>
-            <select id="jobSelect" class="form-select" @bind="selectedJobName" disabled="@isLoadingJobs">
-                @foreach (var job in jobs)
+        <div class="jobs-form card">
+            <div class="card-body">
+                <label class="form-label" for="jobSelect">Available Job</label>
+                <select id="jobSelect" class="form-select" @bind="selectedJobName" disabled="@isLoadingJobs">
+                    @foreach (var job in jobs)
+                    {
+                        <option value="@job.Name">@job.DisplayName</option>
+                    }
+                </select>
+                @if (selectedJob is not null)
                 {
-                    <option value="@job.Name">@job.DisplayName</option>
+                    <p class="job-description">@selectedJob.Description</p>
                 }
-            </select>
-            @if (selectedJob is not null)
-            {
-                <p class="job-description">@selectedJob.Description</p>
-            }
-            <button class="btn btn-primary" @onclick="RunSelectedJobAsync" disabled="@(isRunningJob || string.IsNullOrWhiteSpace(selectedJobName))">
-                @(isRunningJob ? "Running..." : "Run Job")
-            </button>
+                <button class="btn btn-primary" @onclick="RunSelectedJobAsync" disabled="@(isRunningJob || string.IsNullOrWhiteSpace(selectedJobName))">
+                    @(isRunningJob ? "Running..." : "Run Job")
+                </button>
+            </div>
         </div>
-    </div>
 
-    @if (lastRunResponse is not null)
-    {
-        <section class="run-result @(lastRunResponse.Succeeded ? "success" : "failure")">
-            <h2>@(lastRunResponse.Succeeded ? "Completed" : "Failed")</h2>
-            <p><strong>Job:</strong> @lastRunResponse.JobName</p>
-            <p><strong>Message:</strong> @lastRunResponse.Message</p>
-            <p><strong>Finished (UTC):</strong> @lastRunResponse.CompletedAtUtc.ToString("u")</p>
-        </section>
-    }
-</section>
+        @if (lastRunResponse is not null)
+        {
+            <section class="run-result @(lastRunResponse.Succeeded ? "success" : "failure")">
+                <h2>@(lastRunResponse.Succeeded ? "Completed" : "Failed")</h2>
+                <p><strong>Job:</strong> @lastRunResponse.JobName</p>
+                <p><strong>Message:</strong> @lastRunResponse.Message</p>
+                <p><strong>Finished (UTC):</strong> @lastRunResponse.CompletedAtUtc.ToString("u")</p>
+            </section>
+        }
+    </section>
+</ProtectedPageContent>
 
 @code {
     private IReadOnlyList<JobInfoDto> jobs = [];

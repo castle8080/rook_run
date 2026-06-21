@@ -1,7 +1,9 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Security.Claims;
 using System.Text.Json;
 using Bunit;
+using Bunit.TestDoubles;
 using Microsoft.Extensions.DependencyInjection;
 using RookRun.Contracts.Jobs;
 using RookRun.Web.Pages;
@@ -16,6 +18,18 @@ namespace RookRun.Web.UnitTest.Pages;
 public sealed class JobsPageTests : TestContext
 {
     private const string SyncStravaDataJob = "SyncStravaDataJob";
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="JobsPageTests"/> class.
+    /// </summary>
+    public JobsPageTests()
+    {
+        var authContext = this.AddTestAuthorization();
+        authContext.SetAuthorized("runner@example.com");
+        authContext.SetClaims(
+            new Claim(ClaimTypes.Email, "runner@example.com"),
+            new Claim(ApiAuthenticationStateProvider.IsAuthorizedClaimType, "True"));
+    }
 
     /// <summary>
     /// Verifies the page loads job options and displays the selected job description.

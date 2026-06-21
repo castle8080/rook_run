@@ -76,6 +76,8 @@ For each option include:
 
 Rules:
 - Provide at least 2 options when meaningful.
+- When design details depend on current ecosystem practices, libraries, or framework capabilities, search current online materials to confirm the design uses up-to-date techniques and packages.
+- Prefer authoritative and current sources such as official documentation, actively maintained library docs, and recent platform guidance.
 - Ask follow-up questions to resolve tradeoffs and choose a direction.
 - Record final design decisions and rejected alternatives with reasons.
 
@@ -96,7 +98,12 @@ Output requirements:
 
 ### Phase 5: Write Feature Spec
 
-Create the feature document using the template at `templates/feature-request-template.md` and fill all relevant sections.
+Create the feature document using the template at `.github/skills/create-feature-request/templates/feature-request-template.md` and fill all relevant sections.
+
+Template lookup rules:
+- Read `.github/skills/create-feature-request/templates/feature-request-template.md` directly.
+- Do not search recursively for the template unless that exact file is missing.
+- If the template file is missing, stop and report the missing path instead of guessing.
 
 Path selection rules:
 - If `docs/features` exists, write to `docs/features/{feature-name}.md`.
