@@ -28,6 +28,12 @@ main {
     color: #0f172a;
 }
 
+.sign-out-link {
+    margin-left: auto;
+    color: #0f172a;
+    font-weight: 600;
+}
+
     .top-row ::deep a, .top-row ::deep .btn-link {
         white-space: nowrap;
         margin-left: 1.5rem;
@@ -46,6 +52,10 @@ main {
 @media (max-width: 640.98px) {
     .top-row {
         justify-content: space-between;
+    }
+
+    .sign-out-link {
+        margin-left: 0;
     }
 
     .top-row ::deep a, .top-row ::deep .btn-link {

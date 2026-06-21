@@ -13,6 +13,7 @@ This folder holds concise, stable guidance for AI coding work in this repository
 
 - `project-map.md`: one-page map of projects, runtime flow, and technologies
 - `coding-conventions.md`: C# and architecture conventions
+- `authentication-and-authorization.md`: auth pipeline, policy model, and endpoint conventions
 - `exceptions-and-error-handling.md`: exception taxonomy and handling guidance
 - `objectstore-paths-and-serialization.md`: canonical path, serialization, and indexing guidance
 - `jobs-reliability-and-concurrency.md`: retry, throttling, idempotency, and race mitigation

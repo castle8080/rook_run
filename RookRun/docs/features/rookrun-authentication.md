@@ -3,7 +3,7 @@
 ## 1. Overview
 
 ### 1.1 Goal
-- Status: Draft
+- Status: Implemented (pending deployment validation)
 - Owner: TBD
 - Requested by: bryanc
 - Target milestone/date: Next feature after current deployment baseline (target: June 2026)
@@ -48,22 +48,36 @@ RookRun is a hosted app where RookRun.Api serves both API endpoints and the Blaz
 ## 3. Acceptance Criteria
 
 1. Given an unauthenticated user opens the app root, when they navigate to `/`, `/jobs`, `/activities`, or `/run-stats`, then they are challenged to sign in with Microsoft Entra ID before page content is available.
+  - **Implementation**: Non-file routes are served by `MapFallbackToFile("index.html")` with `AuthorizeAttribute` metadata in `RookRun.Api/Program.cs`, triggering OIDC challenge (302 redirect to Entra sign-in) on unauthenticated access.
+
 2. Given an unauthenticated client calls `GET /api/jobs` or other protected API endpoints, when request reaches controller pipeline, then response is unauthorized (or challenged for browser navigation) and controller action is not executed.
+   - **Implementation**: Global fallback authorization policy requires authenticated + allowlisted users; `HandleApiRedirectAsync` returns 401/403 for API calls instead of HTML redirect.
+
 3. Given an authenticated Entra user whose email is not in allowlist, when they access any protected page or API, then access is denied with forbidden behavior.
+   - **Implementation**: `AllowedEmailRequirement` evaluated by `AllowedEmailAuthorizationHandler`; users not in allowlist receive 403 Forbidden or redirect to `/auth/access-denied` page.
+
 4. Given an authenticated Entra user whose email is in allowlist, when they access pages and APIs, then all current app functionality remains available.
+   - **Implementation**: User passes `AllowedEmailAuthorizationHandler` check (email matches allowlist) and gains access to all routes and APIs.
+
 5. Given allowed emails are changed in configuration and app restarted, when users sign in, then authorization decisions reflect the updated allowlist.
+   - **Implementation**: `AllowedEmailAuthorizationHandler` uses `IOptionsMonitor` to read current config; changes apply on app restart (requires `dotnet user-secrets` re-entry or environment variable update).
+
 6. Given static assets are requested directly (for example framework or css/js files), when requested anonymously, then they remain reachable while protected app routes and APIs still require authentication.
+   - **Implementation**: `UseStaticFiles()` runs before `UseAuthentication/Authorization` in middleware pipeline, allowing CSS/JS/Wasm downloads without sign-in.
 
 ## 4. Technical Design
 
 ### 4.1 Related Existing Areas
 - Components/services/files reviewed:
-  - `RookRun.Api/Program.cs` (pipeline and service registration, currently no auth)
+  - `RookRun.Api/Program.cs` (pipeline and service registration, auth and route protection)
   - `RookRun.Api/Controllers/JobsController.cs`
   - `RookRun.Api/Controllers/StravaActivitiesController.cs`
   - `RookRun.Api/Controllers/RunStatsController.cs`
+  - `RookRun.Api/Controllers/AuthController.cs`
+  - `RookRun.Api/Authentication/AllowedEmailAuthorizationHandler.cs`
   - `RookRun.Api/Middleware/RequestResponseLoggingMiddleware.cs`
   - `RookRun.Web/Program.cs` (typed HttpClient registration)
+  - `RookRun.Web/Services/ApiAuthenticationStateProvider.cs`
   - `RookRun.Web/Pages/Home.razor`
   - `RookRun.Web/Pages/Jobs.razor`
   - `RookRun.Web/Pages/Activities.razor`
@@ -71,7 +85,7 @@ RookRun is a hosted app where RookRun.Api serves both API endpoints and the Blaz
   - `RookRun.Web/Services/JobsApiClient.cs`
   - `RookRun.Web/Services/StravaActivitiesApiClient.cs`
 - Existing contracts/models involved:
-  - No contract DTO changes required for v1 auth gate.
+  - Added `RookRun.Contracts/UserAuthDto.cs` for auth-state endpoint responses.
   - New auth options model(s) required in API project for Entra + allowlist binding.
 
 ### 4.2 Design Options Considered
@@ -110,8 +124,8 @@ RookRun is a hosted app where RookRun.Api serves both API endpoints and the Blaz
 
 ### 4.4 Data, Contracts, and Persistence Changes
 - API/DTO changes:
-  - No changes to existing endpoint request/response DTO contracts.
-  - Add optional lightweight endpoint(s) for sign-in/sign-out/status only if needed for UX flow clarity.
+  - Added `GET /auth/me` endpoint returning `UserAuthDto` for frontend auth-state hydration.
+  - Added auth flow endpoints in `AuthController`: `/auth/sign-in`, `/auth/sign-out`, `/auth/access-denied`, `/auth/signed-out`.
 - Domain/model changes:
   - Add auth configuration model, for example:
     - `Authentication:Entra:TenantId`
@@ -136,6 +150,15 @@ RookRun is a hosted app where RookRun.Api serves both API endpoints and the Blaz
 - Observability/logging:
   - Add structured logging around authentication events and authorization denials (without logging tokens/secrets).
   - Keep request logging middleware in pipeline and include authenticated identity (non-sensitive) where possible.
+
+### 4.6 Page Route Protection Design
+- SPA routes are protected by fallback endpoint metadata: `MapFallbackToFile("index.html").WithMetadata(new AuthorizeAttribute())`.
+- Unauthenticated requests to non-file routes trigger an OIDC challenge (302 redirect to Entra sign-in).
+- After sign-in, users return to the requested page and the Blazor app loads fully authenticated.
+- Static assets (CSS, JS, Wasm, images) remain accessible without authentication so the Blazor framework can be downloaded.
+- API endpoints are protected by the global fallback policy and return 401/403 for unauthorized requests.
+- Unknown API routes return 404 via `MapFallback("/api/{*path}", () => Results.NotFound())` and do not serve the SPA shell.
+- This design ensures a seamless UX: users never see a broken app; they're prompted to sign in *before* the app loads.
 
 ## 5. UX Design (Optional)
 
@@ -191,20 +214,20 @@ RookRun is a hosted app where RookRun.Api serves both API endpoints and the Blaz
 
 ### 6.1 Milestones
 - [x] M1: Discovery and final design
-- [ ] M2: Core implementation
-- [ ] M3: Testing and hardening
-- [ ] M4: Documentation and release prep
+- [x] M2: Core implementation
+- [x] M3: Testing and hardening
+- [x] M4: Documentation and release prep
 
 ### 6.2 Work Breakdown
-- [ ] Add auth configuration models and settings binding in API.
-- [ ] Add Entra OIDC + cookie authentication registration in `RookRun.Api/Program.cs`.
-- [ ] Add authorization policy for allowed email list and configure fallback policy requiring authenticated users.
-- [ ] Configure authorization exclusions so static assets remain accessible while API and app routes stay protected.
-- [ ] Apply authorization to controllers (global fallback or `[Authorize]` attributes) and validate API behavior.
-- [ ] Add UI support for denied/error/login state as needed in `RookRun.Web` pages/layout.
-- [ ] Add sign-out endpoint/flow.
-- [ ] Update appsettings samples and deployment documentation with Entra setup.
-- [ ] Add/adjust tests in API and Web unit test projects.
+- [x] Add auth configuration models and settings binding in API.
+- [x] Add Entra OIDC + cookie authentication registration in `RookRun.Api/Program.cs`.
+- [x] Add authorization policy for allowed email list and configure fallback policy requiring authenticated users.
+- [x] Configure authorization exclusions so static assets remain accessible while API and app routes stay protected.
+- [x] Apply authorization to controllers (global fallback or `[Authorize]` attributes) and validate API behavior.
+- [x] Add UI support for denied/error/login state as needed in `RookRun.Web` pages/layout.
+- [x] Add sign-out endpoint/flow.
+- [x] Update appsettings samples and deployment documentation with Entra setup.
+- [x] Add/adjust tests in API and Web unit test projects.
 
 ### 6.3 Dependencies
 - Internal:
@@ -225,8 +248,8 @@ RookRun is a hosted app where RookRun.Api serves both API endpoints and the Blaz
 ## 7. Tracking
 
 ### 7.1 Status Board
-- Overall status: Not Started
-- Last updated: 2026-06-19
+- Overall status: Implemented
+- Last updated: 2026-06-21
 
 ### 7.2 Decision Log
 - [2026-06-19] Decision: Use API-hosted OIDC + cookie auth (Option A). Reason: aligns with hosted architecture and least implementation complexity for v1.
@@ -238,6 +261,17 @@ RookRun is a hosted app where RookRun.Api serves both API endpoints and the Blaz
 
 ### 7.3 Implementation Notes and Lessons
 - [2026-06-19] Initial design completed from current architecture review; no existing auth pipeline currently configured.
+- [2026-06-20] Implemented server-hosted OpenID Connect + cookie auth with global fallback authorization policy requiring authenticated and allowlisted users.
+- [2026-06-20] Added dedicated auth endpoints: `/auth/sign-in`, `/auth/sign-out`, and `/auth/access-denied` for interactive flow and clear denial UX.
+- [2026-06-20] API requests now return 401/403 status codes instead of redirect HTML when unauthenticated/forbidden.
+- [2026-06-20] Added startup validation for required Entra settings and non-empty allowlist.
+- [2026-06-20] Request logging now includes non-sensitive identity context (`IsAuthenticated`, `UserIdentity`).
+- [2026-06-20] Refined page route protection to use `MapFallbackToFile("index.html")` with authorization metadata; this avoids brittle per-route mappings and correctly supports direct deep-link refreshes.
+- [2026-06-20] Static assets remain unprotected so the Blazor framework, CSS, and JS can be downloaded during the auth challenge flow.
+- [2026-06-20] Added API-only fallback route (`/api/{*path}`) returning 404 to prevent unknown API paths from accidentally serving `index.html`.
+- [2026-06-21] Added OIDC sign-out event to set absolute `post_logout_redirect_uri`; Entra rejects relative values.
+- [2026-06-21] Added signed-out confirmation endpoint (`/auth/signed-out`) to avoid immediate re-challenge loops after logout.
+- [2026-06-21] Added frontend auth-state hydration via `/auth/me` + `ApiAuthenticationStateProvider` so Blazor auth state follows server cookie state.
 
 ### 7.4 Open Questions
 - [ ] Should production move from environment variables to certificate credentials or Key Vault after v1 stabilization?
@@ -267,9 +301,13 @@ RookRun is a hosted app where RookRun.Api serves both API endpoints and the Blaz
   - `dotnet build RookRun.slnx -v minimal`
   - `dotnet test RookRun.slnx -v minimal`
 - Result summary:
-  - Pending implementation.
+  - Passed on 2026-06-20.
+  - Build: success.
+  - Tests: 368 passed, 0 failed, 0 skipped.
 - Links to relevant artifacts:
-  - Pending implementation.
+  - Auth implementation: `RookRun.Api/Program.cs`, `RookRun.Api/Controllers/AuthController.cs`, `RookRun.Api/Authentication/*`.
+  - API/auth tests: `RookRun.UnitTest/Api/Authentication/*`.
+  - UI test: `RookRun.Web.UnitTest/Layout/MainLayoutTests.cs`.
 
 ## 9. Implementer Expectations
 
@@ -283,9 +321,9 @@ Implementers are expected to:
 
 ## 10. Documentation Updates
 
-- [ ] Update this feature document with final implementation decisions and test evidence.
-- [ ] Update deployment docs with Entra app registration, redirect URIs, and secret configuration.
-- [ ] Update architecture/project docs if auth flow or middleware conventions change.
+- [x] Update this feature document with final implementation decisions and test evidence.
+- [x] Update deployment docs with Entra app registration, redirect URIs, and secret configuration.
+- [x] Update architecture/project docs with auth flow and middleware conventions.
 
 ## 11. Entra Setup Steps (Initial Runbook)
 
@@ -296,8 +334,10 @@ Implementers are expected to:
    - Platform: Web.
    - Redirect URI (dev): `https://localhost:<api-port>/signin-oidc`.
    - Redirect URI (prod): `https://<your-host>/signin-oidc`.
-  - Add sign-out callback redirect URI: `https://<your-host>/signout-callback-oidc`.
-  - Note: Microsoft docs indicate the sign-out callback URI should be added to the app registration; otherwise sign-out redirect can fail.
+  - Post-logout redirect URI (dev): `https://localhost:<api-port>/auth/signed-out`.
+  - Post-logout redirect URI (prod): `https://<your-host>/auth/signed-out`.
+  - Add sign-out callback path URI if required by environment: `https://<your-host>/signout-callback-oidc`.
+  - Note: Entra requires `post_logout_redirect_uri` to be an absolute URI.
 3. Create credentials:
    - Add a client secret (or certificate for higher security).
   - For this feature, store secret in environment variables (not appsettings source-controlled files).
