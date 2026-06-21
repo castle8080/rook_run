@@ -14,4 +14,9 @@ public sealed record UserAuthDto
     /// Gets the email address of the authenticated user, if authenticated.
     /// </summary>
     public string? Email { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the authenticated user is authorized to access the application.
+    /// </summary>
+    public bool IsAuthorized { get; init; }
 }

@@ -1,5 +1,7 @@
 using System.Net;
+using System.Security.Claims;
 using Bunit;
+using Bunit.TestDoubles;
 using Microsoft.Extensions.DependencyInjection;
 using RookRun.Contracts.Strava;
 using RookRun.Web.Pages;
@@ -13,6 +15,18 @@ namespace RookRun.Web.UnitTest.Pages;
 /// </summary>
 public sealed class RunStatsPageTests : TestContext
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="RunStatsPageTests"/> class.
+    /// </summary>
+    public RunStatsPageTests()
+    {
+        var authContext = this.AddTestAuthorization();
+        authContext.SetAuthorized("runner@example.com");
+        authContext.SetClaims(
+            new Claim(ClaimTypes.Email, "runner@example.com"),
+            new Claim(ApiAuthenticationStateProvider.IsAuthorizedClaimType, "True"));
+    }
+
     /// <summary>
     /// Verifies the page loads run stats on initialization and renders key summary and month content.
     /// </summary>

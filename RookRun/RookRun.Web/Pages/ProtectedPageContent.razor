@@ -1,0 +1,54 @@
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@inject NavigationManager NavigationManager
+
+@if (isAuthorized is null)
+{
+    <!-- Loading authorization state -->
+}
+else if (!isAuthorized.Value)
+{
+    <!-- User is not authorized, redirect will happen on initialization -->
+}
+else
+{
+    @ChildContent
+}
+
+@code {
+    private bool? isAuthorized;
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [CascadingParameter]
+    private Task<AuthenticationState>? AuthenticationStateTask { get; set; }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AuthenticationStateTask is null)
+        {
+            return;
+        }
+
+        var authState = await AuthenticationStateTask;
+        var user = authState.User;
+
+        if (user?.Identity?.IsAuthenticated != true)
+        {
+            NavigationManager.NavigateTo("/");
+            return;
+        }
+
+        var isAuthorizedClaim = user.FindFirst(ApiAuthenticationStateProvider.IsAuthorizedClaimType);
+        var authorizedValue = isAuthorizedClaim?.Value == "True";
+
+        if (!authorizedValue)
+        {
+            NavigationManager.NavigateTo("/access-denied");
+            return;
+        }
+
+        isAuthorized = true;
+    }
+}

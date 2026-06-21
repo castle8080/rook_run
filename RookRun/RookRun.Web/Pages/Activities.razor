@@ -4,39 +4,41 @@
 
 <PageTitle>Activities</PageTitle>
 
-<section class="activities-shell">
-    <header class="activities-header">
-        <h1>Activities</h1>
-        <p>Load all activities for a UTC date range and review key workout metrics.</p>
-    </header>
+<ProtectedPageContent>
+    <section class="activities-shell">
+        <header class="activities-header">
+            <h1>Activities</h1>
+            <p>Load all activities for a UTC date range and review key workout metrics.</p>
+        </header>
 
-    <ActivitiesControls
-        StartDateUtc="@startDateUtc"
-        StartDateUtcChanged="OnStartDateUtcChanged"
-        EndDateUtc="@endDateUtc"
-        EndDateUtcChanged="OnEndDateUtcChanged"
-        SelectedTypeFilter="@SelectedTypeFilter"
-        SelectedTypeFilterChanged="OnSelectedTypeFilterChanged"
-        AvailableTypeFilters="@availableTypeFilters"
-        IsLoading="@isLoading"
-        IsDownloadDisabled="@(filteredActivities.Count == 0)"
-        OnLoadActivities="LoadActivitiesAsync"
-        OnDownloadCsv="DownloadCsvAsync" />
+        <ActivitiesControls
+            StartDateUtc="@startDateUtc"
+            StartDateUtcChanged="OnStartDateUtcChanged"
+            EndDateUtc="@endDateUtc"
+            EndDateUtcChanged="OnEndDateUtcChanged"
+            SelectedTypeFilter="@SelectedTypeFilter"
+            SelectedTypeFilterChanged="OnSelectedTypeFilterChanged"
+            AvailableTypeFilters="@availableTypeFilters"
+            IsLoading="@isLoading"
+            IsDownloadDisabled="@(filteredActivities.Count == 0)"
+            OnLoadActivities="LoadActivitiesAsync"
+            OnDownloadCsv="DownloadCsvAsync" />
 
-    @if (!string.IsNullOrWhiteSpace(validationError))
-    {
-        <div class="alert alert-warning">@validationError</div>
-    }
+        @if (!string.IsNullOrWhiteSpace(validationError))
+        {
+            <div class="alert alert-warning">@validationError</div>
+        }
 
-    @if (!string.IsNullOrWhiteSpace(loadError))
-    {
-        <div class="alert alert-danger">@loadError</div>
-    }
+        @if (!string.IsNullOrWhiteSpace(loadError))
+        {
+            <div class="alert alert-danger">@loadError</div>
+        }
 
-    <p class="activities-summary">Showing @filteredActivities.Count of @activities.Count loaded activities.</p>
+        <p class="activities-summary">Showing @filteredActivities.Count of @activities.Count loaded activities.</p>
 
-    <ActivitiesTable Activities="@filteredActivities" />
-</section>
+        <ActivitiesTable Activities="@filteredActivities" />
+    </section>
+</ProtectedPageContent>
 
 @code {
     private readonly List<StravaActivityDto> activities = [];

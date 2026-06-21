@@ -1,15 +1,20 @@
+using System.Net.Http.Json;
 using System.Security.Claims;
-using System.Text.Json;
 using Microsoft.AspNetCore.Components.Authorization;
 using RookRun.Contracts;
 
 namespace RookRun.Web.Services;
 
 /// <summary>
-/// Provides authentication state by querying the server's /api/auth/me endpoint.
+/// Provides authentication state by querying the server's /auth/me endpoint.
 /// </summary>
 public sealed class ApiAuthenticationStateProvider : AuthenticationStateProvider
 {
+    /// <summary>
+    /// Custom claim type for authorization status.
+    /// </summary>
+    public const string IsAuthorizedClaimType = "auth:isauthorized";
+
     private readonly HttpClient httpClient;
 
     /// <summary>
@@ -29,19 +34,19 @@ public sealed class ApiAuthenticationStateProvider : AuthenticationStateProvider
     {
         try
         {
-            var response = await this.httpClient.GetAsync("/api/auth/me");
+            var response = await this.httpClient.GetAsync("/auth/me");
             
             if (response.IsSuccessStatusCode)
             {
-                var jsonContent = await response.Content.ReadAsStringAsync();
-                var userAuth = JsonSerializer.Deserialize<UserAuthDto>(jsonContent);
-                
+                var userAuth = await response.Content.ReadFromJsonAsync<UserAuthDto>();
+
                 if (userAuth?.IsAuthenticated ?? false)
                 {
                     var claims = new List<Claim>
                     {
                         new Claim(ClaimTypes.Email, userAuth.Email ?? string.Empty),
-                        new Claim(ClaimTypes.Name, userAuth.Email ?? string.Empty)
+                        new Claim(ClaimTypes.Name, userAuth.Email ?? string.Empty),
+                        new Claim(IsAuthorizedClaimType, userAuth.IsAuthorized.ToString())
                     };
 
                     var identity = new ClaimsIdentity(claims, "ApiAuth");

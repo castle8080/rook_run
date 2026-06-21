@@ -1,4 +1,6 @@
 using Bunit;
+using Bunit.TestDoubles;
+using System.Security.Claims;
 using Microsoft.Extensions.DependencyInjection;
 using RookRun.Contracts.Strava;
 using RookRun.Web.Pages;
@@ -12,6 +14,18 @@ namespace RookRun.Web.UnitTest.Pages;
 /// </summary>
 public sealed class ActivitiesPageTests : TestContext
 {
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ActivitiesPageTests"/> class.
+    /// </summary>
+    public ActivitiesPageTests()
+    {
+        var authContext = this.AddTestAuthorization();
+        authContext.SetAuthorized("runner@example.com");
+        authContext.SetClaims(
+            new Claim(ClaimTypes.Email, "runner@example.com"),
+            new Claim(ApiAuthenticationStateProvider.IsAuthorizedClaimType, "True"));
+    }
+
     /// <summary>
     /// Verifies loading activities renders data rows and summary totals.
     /// </summary>

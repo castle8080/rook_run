@@ -19,6 +19,7 @@ builder.Services
 builder.Services.AddSingleton<IValidateOptions<RookRunAuthenticationOptions>, RookRunAuthenticationOptionsValidator>();
 
 builder.Services.AddControllers();
+builder.Services.AddControllersWithViews();
 builder.Services.AddOpenApi();
 builder.Services
     .AddAuthentication(options =>
@@ -75,10 +76,13 @@ builder.Services
 builder.Services.AddSingleton<IAuthorizationHandler, AllowedEmailAuthorizationHandler>();
 builder.Services.AddAuthorization(options =>
 {
-    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+    var allowlistedUserPolicy = new AuthorizationPolicyBuilder()
         .RequireAuthenticatedUser()
         .AddRequirements(new AllowedEmailRequirement())
         .Build();
+
+    options.AddPolicy(RookRunAuthorizationPolicyNames.AllowlistedUser, allowlistedUserPolicy);
+    options.FallbackPolicy = allowlistedUserPolicy;
 });
 builder.Services.AddResponseCompression(options =>
 {
@@ -137,9 +141,9 @@ app.MapFallback("/api/{*path}", () => Results.NotFound())
     .AllowAnonymous();
 
 // Serve the Blazor app for non-file routes (including deep links like /activities)
-// and require auth before loading the SPA shell.
+// and require the same allowlisted policy as API endpoints before loading the SPA shell.
 app.MapFallbackToFile("index.html")
-    .WithMetadata(new AuthorizeAttribute());
+    .RequireAuthorization(RookRunAuthorizationPolicyNames.AllowlistedUser);
 
 app.Run();
 
