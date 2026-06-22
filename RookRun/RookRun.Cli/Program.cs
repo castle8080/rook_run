@@ -3,40 +3,39 @@ using Microsoft.Extensions.Logging;
 using RookRun.Cli.Bootstrap;
 using RookRun.Job;
 
-namespace RookRun.Cli
+namespace RookRun.Cli;
+
+internal class Program
 {
-    internal class Program
+    static async Task<int> Main(string[] args)
     {
-        static async Task<int> Main(string[] args)
+        var host = AppHostFactory.Create(args);
+        await host.StartAsync();
+        try
         {
-            var host = AppHostFactory.Create(args);
-            await host.StartAsync();
+            var logger = host.Services.GetRequiredService<ILogger<Program>>();
+            logger.LogInformation("Application started successfully.");
             try
             {
-                var logger = host.Services.GetRequiredService<ILogger<Program>>();
-                logger.LogInformation("Application started successfully.");
-                try
-                {
-                    // Get job to run
-                    //var jobName = "SyncStravaActivitiesJob";
-                    //var jobName = "StravaActivitiesExportJob";
-                    var jobName = "CopyObjectStoreJob";
-                    var job = host.Services.GetRequiredKeyedService<IJob>(jobName);
+                // Get job to run
+                //var jobName = "SyncStravaActivitiesJob";
+                //var jobName = "StravaActivitiesExportJob";
+                var jobName = "CopyObjectStoreJob";
+                var job = host.Services.GetRequiredKeyedService<IJob>(jobName);
 
-                    await job.ExecuteAsync(CancellationToken.None);
+                await job.ExecuteAsync(CancellationToken.None);
 
-                    return 0;
-                }
-                catch (Exception e)
-                {
-                    logger.LogError(e, "An error occurred during application execution.");
-                    return 1;
-                }
+                return 0;
             }
-            finally
+            catch (Exception e)
             {
-                await host.StopAsync();
+                logger.LogError(e, "An error occurred during application execution.");
+                return 1;
             }
+        }
+        finally
+        {
+            await host.StopAsync();
         }
     }
 }
